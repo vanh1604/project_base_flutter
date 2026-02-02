@@ -1,19 +1,19 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../domain/usecases/get_all_books.dart';
+import '../../data/repositories/books_repository.dart';
 import 'books_event.dart';
 import 'books_state.dart';
 
-/// Books Feature BLoC
+/// Books Feature BLoC - MVVM + BLoC Pattern
 ///
 /// Handles loading and displaying books.
-/// Search functionality has been moved to SearchBloc (features/search/).
+/// In MVVM + BLoC, BLoC calls Repository directly (no use cases).
 ///
 /// Location: features/books/presentation/bloc/
 class BooksBloc extends Bloc<BooksEvent, BooksState> {
-  final GetAllBooks getAllBooks;
+  final BooksRepository repository;
 
   BooksBloc({
-    required this.getAllBooks,
+    required this.repository,
   }) : super(const BooksInitial()) {
     on<LoadBooksEvent>(_onLoadBooks);
     on<RefreshBooksEvent>(_onRefreshBooks);
@@ -25,7 +25,7 @@ class BooksBloc extends Bloc<BooksEvent, BooksState> {
   ) async {
     emit(const BooksLoading());
 
-    final result = await getAllBooks();
+    final result = await repository.getAllBooks();
 
     result.fold(
       (failure) => emit(BooksError(failure.message)),
@@ -37,7 +37,7 @@ class BooksBloc extends Bloc<BooksEvent, BooksState> {
     RefreshBooksEvent event,
     Emitter<BooksState> emit,
   ) async {
-    final result = await getAllBooks();
+    final result = await repository.getAllBooks();
 
     result.fold(
       (failure) => emit(BooksError(failure.message)),

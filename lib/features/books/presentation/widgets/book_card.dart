@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import '../../domain/entities/book.dart';
+import '../../data/models/book_model.dart';
 
 class BookCard extends StatelessWidget {
-  final Book book;
+  final BookModel book;
   final VoidCallback? onTap;
 
   const BookCard({

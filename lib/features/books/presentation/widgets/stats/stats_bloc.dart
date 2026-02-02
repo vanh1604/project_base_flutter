@@ -1,5 +1,5 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../domain/repositories/books_repository.dart';
+import '../../../data/repositories/books_repository.dart';
 import 'stats_event.dart';
 import 'stats_state.dart';
 

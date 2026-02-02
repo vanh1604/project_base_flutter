@@ -1,20 +1,24 @@
 import 'package:dartz/dartz.dart';
 import '../../../../core/errors/exceptions.dart';
 import '../../../../core/errors/failures.dart';
-import '../../domain/entities/book.dart';
-import '../../domain/repositories/books_repository.dart';
+import '../models/book_model.dart';
 import '../datasources/books_remote_datasource.dart';
 
-class BooksRepositoryImpl implements BooksRepository {
+/// Books Repository - MVVM + BLoC Pattern
+///
+/// In MVVM + BLoC, we don't need repository interfaces.
+/// This is a concrete class that handles data operations.
+///
+/// Location: features/books/data/repositories/
+class BooksRepository {
   final BooksRemoteDataSource remoteDataSource;
 
-  BooksRepositoryImpl({required this.remoteDataSource});
+  BooksRepository({required this.remoteDataSource});
 
-  @override
-  Future<Either<Failure, List<Book>>> getAllBooks() async {
+  Future<Either<Failure, List<BookModel>>> getAllBooks() async {
     try {
       final books = await remoteDataSource.getAllBooks();
-      return Right(books.map((model) => model.toEntity()).toList());
+      return Right(books);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {
@@ -24,11 +28,10 @@ class BooksRepositoryImpl implements BooksRepository {
     }
   }
 
-  @override
-  Future<Either<Failure, List<Book>>> searchBooks(String query) async {
+  Future<Either<Failure, List<BookModel>>> searchBooks(String query) async {
     try {
       final books = await remoteDataSource.searchBooks(query);
-      return Right(books.map((model) => model.toEntity()).toList());
+      return Right(books);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {
@@ -38,11 +41,10 @@ class BooksRepositoryImpl implements BooksRepository {
     }
   }
 
-  @override
-  Future<Either<Failure, Book>> getBookById(int id) async {
+  Future<Either<Failure, BookModel>> getBookById(int id) async {
     try {
       final book = await remoteDataSource.getBookById(id);
-      return Right(book.toEntity());
+      return Right(book);
     } on ServerException catch (e) {
       return Left(ServerFailure(e.message));
     } on NetworkException catch (e) {

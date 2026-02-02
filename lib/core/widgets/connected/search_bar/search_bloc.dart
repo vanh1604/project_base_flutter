@@ -1,19 +1,19 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../../features/books/domain/usecases/search_books.dart';
+import '../../../../features/books/data/repositories/books_repository.dart';
 import 'search_event.dart';
 import 'search_state.dart';
 
-/// SearchBar Connected Component BLoC
+/// SearchBar Connected Component BLoC - MVVM + BLoC Pattern
 ///
-/// Handles search functionality using Books domain layer.
+/// Handles search functionality using Books repository.
 /// This is a Connected Component (NOT a feature) because it has no business domain.
-/// It depends on Books feature's use cases.
+/// It depends on Books feature's repository.
 ///
 /// Location: core/widgets/connected/search_bar/
 class SearchBloc extends Bloc<SearchEvent, SearchState> {
-  final SearchBooks searchBooks;
+  final BooksRepository repository;
 
-  SearchBloc({required this.searchBooks}) : super(const SearchInitial()) {
+  SearchBloc({required this.repository}) : super(const SearchInitial()) {
     on<SearchBooksEvent>(_onSearchBooks);
     on<ClearSearchEvent>(_onClearSearch);
   }
@@ -29,7 +29,7 @@ class SearchBloc extends Bloc<SearchEvent, SearchState> {
 
     emit(const SearchLoading());
 
-    final result = await searchBooks(event.query);
+    final result = await repository.searchBooks(event.query);
 
     result.fold(
       (failure) => emit(SearchError(failure.message)),

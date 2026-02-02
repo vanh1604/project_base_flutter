@@ -1,11 +1,11 @@
 # 📚 Stephen King Books App
 
-> Ứng dụng Flutter hiện đại được xây dựng theo **Clean Architecture**, **BLoC Pattern**, và **Hybrid Architecture** - Showcase tốt nhất về cách tổ chức code professional trong Flutter.
+> Ứng dụng Flutter hiện đại được xây dựng theo **MVVM + BLoC Pattern** và **Hybrid Architecture** - Showcase tốt nhất về cách tổ chức code professional trong Flutter.
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.10.7-02569B?logo=flutter)
 ![Dart](https://img.shields.io/badge/Dart-3.10.7-0175C2?logo=dart)
 ![BLoC](https://img.shields.io/badge/BLoC-8.1.6-blue)
-![Clean Architecture](https://img.shields.io/badge/Architecture-Clean-green)
+![MVVM](https://img.shields.io/badge/Architecture-MVVM-green)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ---
@@ -31,7 +31,7 @@
 
 Project này phục vụ như một **learning resource** và **production-ready template** cho:
 
-- ✅ **Clean Architecture** implementation
+- ✅ **MVVM + BLoC** architecture implementation
 - ✅ **BLoC Pattern** cho state management
 - ✅ **Hybrid Architecture** cho folder organization (Component-Based + Feature-First)
 - ✅ **Dependency Injection** với GetIt
@@ -101,7 +101,7 @@ Simple Screen sử dụng 1 feature: **Books**
 
 ### Tổng Quan
 
-Project này implement **3 patterns chính** kết hợp với nhau:
+Project này implement **2 patterns chính** kết hợp với nhau:
 
 ```
 ┌─────────────────────────────────────────────────────────┐
@@ -109,56 +109,37 @@ Project này implement **3 patterns chính** kết hợp với nhau:
 │   (Component-Based + Feature-First Organization)        │
 │                                                          │
 │   ┌─────────────────────────────────────────────┐      │
-│   │       CLEAN ARCHITECTURE                    │      │
-│   │   (3 Layers: Domain → Data → Presentation) │      │
+│   │       MVVM + BLOC PATTERN                   │      │
+│   │   (BLoC for State Management)               │      │
+│   │   (Repository Pattern for Data)             │      │
 │   │                                              │      │
-│   │   ┌─────────────────────────────────┐      │      │
-│   │   │      BLOC PATTERN               │      │      │
-│   │   │   (Reactive State Management)   │      │      │
-│   │   └─────────────────────────────────┘      │      │
+│   │   View → BLoC → Repository → DataSource    │      │
+│   │                                              │      │
 │   └─────────────────────────────────────────────┘      │
 └─────────────────────────────────────────────────────────┘
 ```
 
-### Clean Architecture - 3 Layers
+### MVVM + BLoC Architecture - 2 Layers
 
-#### **1. Domain Layer** (Business Logic Core)
-**Vai trò:** Chứa business logic thuần túy, độc lập với framework
-
-```dart
-domain/
-├── entities/         # Business objects (Book)
-├── repositories/     # Repository contracts (interfaces)
-└── usecases/        # Business use cases (GetAllBooks, SearchBooks)
-```
-
-**Đặc điểm:**
-- ✅ Không phụ thuộc Flutter framework
-- ✅ Không phụ thuộc Data Layer
-- ✅ Pure Dart code
-- ✅ Chứa business rules
-
----
-
-#### **2. Data Layer** (Data Management)
+#### **1. Data Layer** (Data Management)
 **Vai trò:** Quản lý data từ API, Database, Cache
 
 ```dart
 data/
 ├── datasources/      # API calls, local storage (BooksRemoteDataSource)
 ├── models/          # Data models với JSON parsing (BookModel)
-└── repositories/    # Implement Domain repository contracts
+└── repositories/    # Concrete repository classes
 ```
 
 **Đặc điểm:**
-- ✅ Implement Repository interfaces từ Domain
+- ✅ Repository pattern - concrete classes (không phải interfaces)
 - ✅ Handle API calls, caching
-- ✅ Convert Models ↔ Entities
+- ✅ Models serve as both business objects và data transfer objects
 - ✅ Handle technical errors (Exceptions)
 
 ---
 
-#### **3. Presentation Layer** (UI & State Management)
+#### **2. Presentation Layer** (UI & State Management)
 **Vai trò:** UI components và BLoC state management
 
 ```dart
@@ -170,7 +151,7 @@ presentation/
 
 **Đặc điểm:**
 - ✅ BLoC Pattern cho state management
-- ✅ Gọi Use Cases từ Domain
+- ✅ BLoC gọi Repository trực tiếp (không qua Use Cases)
 - ✅ Reactive UI với Streams
 - ✅ Handle business errors (Failures)
 
@@ -199,12 +180,14 @@ context.read<BooksBloc>().add(LoadBooksEvent());
 
 // BLoC processes
 class BooksBloc extends Bloc<BooksEvent, BooksState> {
+  final BooksRepository repository;
+
   Future<void> _onLoadBooks(...) async {
-    emit(BooksLoading());                    // 1. Loading state
-    final result = await getAllBooks();      // 2. Call use case
+    emit(BooksLoading());                          // 1. Loading state
+    final result = await repository.getAllBooks(); // 2. Call repository
     result.fold(
-      (failure) => emit(BooksError(...)),    // 3a. Error state
-      (books) => emit(BooksLoaded(books)),   // 3b. Success state
+      (failure) => emit(BooksError(...)),          // 3a. Error state
+      (books) => emit(BooksLoaded(books)),         // 3b. Success state
     );
   }
 }
@@ -238,24 +221,20 @@ Future<void> initializeDependencies() async {
     () => BooksRemoteDataSourceImpl(client: sl()),
   );
 
-  // Repositories
+  // Repositories (Concrete class)
   sl.registerLazySingleton<BooksRepository>(
-    () => BooksRepositoryImpl(remoteDataSource: sl()),
+    () => BooksRepository(remoteDataSource: sl()),
   );
-
-  // Use Cases
-  sl.registerLazySingleton(() => GetAllBooks(repository: sl()));
 
   // BLoCs (Factory - new instance mỗi screen)
   sl.registerFactory(() => BooksBloc(
-    getAllBooks: sl(),
-    searchBooks: sl(),
+    repository: sl(),
   ));
 }
 ```
 
 **Pattern:**
-- `Lazy Singleton`: Tạo 1 lần, dùng chung (HTTP Client, Repository, Use Case)
+- `Lazy Singleton`: Tạo 1 lần, dùng chung (HTTP Client, Repository)
 - `Factory`: Tạo mới mỗi lần (BLoC - mỗi screen 1 instance riêng)
 
 ---
@@ -291,25 +270,16 @@ lib/
 │           ├── loading/      # LoadingIndicator
 │           └── common/       # ErrorWidgetCustom, EmptyStateWidget
 │
-├── features/                  # 🎯 Business Features (Domain-Driven)
+├── features/                  # 🎯 Business Features (MVVM + BLoC)
 │   │
 │   ├── books/                # 📚 Books Feature (ONLY real feature)
 │   │   ├── data/
 │   │   │   ├── datasources/
 │   │   │   │   └── books_remote_datasource.dart  # API calls
 │   │   │   ├── models/
-│   │   │   │   └── book_model.dart               # JSON ↔ Dart
+│   │   │   │   └── book_model.dart               # Business + Data object
 │   │   │   └── repositories/
-│   │   │       └── books_repository_impl.dart    # Repository implementation
-│   │   │
-│   │   ├── domain/
-│   │   │   ├── entities/
-│   │   │   │   └── book.dart                     # Business object
-│   │   │   ├── repositories/
-│   │   │   │   └── books_repository.dart         # Repository contract
-│   │   │   └── usecases/
-│   │   │       ├── get_all_books.dart            # Use case: Get all
-│   │   │       └── search_books.dart             # Use case: Search
+│   │   │       └── books_repository.dart         # Concrete repository
 │   │   │
 │   │   └── presentation/
 │   │       ├── bloc/
@@ -349,13 +319,12 @@ lib/
 | `widgets/presentational/` | Pure UI widgets (NO API) | Buttons, Cards, Inputs |
 
 #### **features/** - Business Logic
-Mỗi feature có **3 layers** đầy đủ:
+Mỗi feature có **2 layers** (MVVM + BLoC):
 
 | Layer | Vai Trò | Files |
 |-------|---------|-------|
-| **domain/** | Business logic core | Entities, Repository contracts, Use Cases |
-| **data/** | Data management | Models, Data Sources, Repository implementation |
-| **presentation/** | UI & State | BLoC (Events/States/Logic), Widgets |
+| **data/** | Data management | Models, Data Sources, Concrete Repository |
+| **presentation/** | UI & State | BLoC (Events/States/Logic), Pages, Widgets |
 
 #### **screens/composite/** - Composite Screens
 **Quy tắc (Hybrid Architecture):**

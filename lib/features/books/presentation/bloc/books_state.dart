@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import '../../domain/entities/book.dart';
+import '../../data/models/book_model.dart';
 
 abstract class BooksState extends Equatable {
   const BooksState();
@@ -17,7 +17,7 @@ class BooksLoading extends BooksState {
 }
 
 class BooksLoaded extends BooksState {
-  final List<Book> books;
+  final List<BookModel> books;
   final bool isSearching;
   final String searchQuery;
 
@@ -31,7 +31,7 @@ class BooksLoaded extends BooksState {
   List<Object?> get props => [books, isSearching, searchQuery];
 
   BooksLoaded copyWith({
-    List<Book>? books,
+    List<BookModel>? books,
     bool? isSearching,
     String? searchQuery,
   }) {

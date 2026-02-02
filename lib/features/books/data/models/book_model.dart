@@ -1,16 +1,31 @@
-import '../../domain/entities/book.dart';
+import 'package:equatable/equatable.dart';
 
-class BookModel extends Book {
+/// Book Model - MVVM + BLoC Pattern
+///
+/// In MVVM + BLoC, we don't separate Entity and Model.
+/// This class serves as both business object AND data model.
+///
+/// Location: features/books/data/models/
+class BookModel extends Equatable {
+  final int id;
+  final String title;
+  final int year;
+  final String handle;
+  final String publisher;
+  final String isbn;
+  final int pages;
+
   const BookModel({
-    required super.id,
-    required super.title,
-    required super.year,
-    required super.handle,
-    required super.publisher,
-    required super.isbn,
-    required super.pages,
+    required this.id,
+    required this.title,
+    required this.year,
+    required this.handle,
+    required this.publisher,
+    required this.isbn,
+    required this.pages,
   });
 
+  // JSON serialization for API/Database
   factory BookModel.fromJson(Map<String, dynamic> json) {
     return BookModel(
       id: json['id'] as int,
@@ -35,15 +50,7 @@ class BookModel extends Book {
     };
   }
 
-  Book toEntity() {
-    return Book(
-      id: id,
-      title: title,
-      year: year,
-      handle: handle,
-      publisher: publisher,
-      isbn: isbn,
-      pages: pages,
-    );
-  }
+  // Equatable for value comparison
+  @override
+  List<Object?> get props => [id, title, year, handle, publisher, isbn, pages];
 }

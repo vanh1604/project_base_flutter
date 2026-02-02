@@ -1,10 +1,7 @@
 import 'package:get_it/get_it.dart';
 import 'package:http/http.dart' as http;
 import '../../features/books/data/datasources/books_remote_datasource.dart';
-import '../../features/books/data/repositories/books_repository_impl.dart';
-import '../../features/books/domain/repositories/books_repository.dart';
-import '../../features/books/domain/usecases/get_all_books.dart';
-import '../../features/books/domain/usecases/search_books.dart';
+import '../../features/books/data/repositories/books_repository.dart';
 import '../../features/books/presentation/bloc/books_bloc.dart';
 import '../../features/books/presentation/widgets/stats/stats_bloc.dart';
 import '../widgets/connected/search_bar/search_bloc.dart';
@@ -13,10 +10,10 @@ final sl = GetIt.instance;
 
 /// Initialize all dependencies using GetIt Service Locator
 ///
-/// Architecture:
-/// - Books Feature: Full feature (Domain + Data + Presentation)
-/// - Search Component: Connected widget (uses Books domain)
-/// - Stats Component: Books widget (aggregates Books data)
+/// Architecture: MVVM + BLoC Pattern
+/// - Books Feature: Business feature with Repository + DataSource
+/// - Search Component: Connected widget (depends on Books repository)
+/// - Stats Component: Books widget (aggregates Books data from repository)
 Future<void> initializeDependencies() async {
   // ============================================
   // EXTERNAL DEPENDENCIES
@@ -31,33 +28,27 @@ Future<void> initializeDependencies() async {
   );
 
   // ============================================
-  // REPOSITORIES (Books Feature)
+  // REPOSITORIES (Books Feature) - Concrete class
   // ============================================
   sl.registerLazySingleton<BooksRepository>(
-    () => BooksRepositoryImpl(remoteDataSource: sl()),
+    () => BooksRepository(remoteDataSource: sl()),
   );
-
-  // ============================================
-  // USE CASES (Books Feature)
-  // ============================================
-  sl.registerLazySingleton(() => GetAllBooks(repository: sl()));
-  sl.registerLazySingleton(() => SearchBooks(repository: sl()));
 
   // ============================================
   // BLOCS - Factory Pattern
   // ============================================
 
-  // Books Feature BLoC
+  // Books Feature BLoC (inject Repository)
   sl.registerFactory(() => BooksBloc(
-        getAllBooks: sl(),
+        repository: sl(),
       ));
 
-  // Search Connected Component BLoC (uses Books domain use case)
+  // Search Connected Component BLoC (inject Repository)
   sl.registerFactory(() => SearchBloc(
-        searchBooks: sl(),
+        repository: sl(),
       ));
 
-  // Stats Widget BLoC (part of Books feature, uses Books repository)
+  // Stats Widget BLoC (inject Repository)
   sl.registerFactory(() => StatsBloc(
         repository: sl(),
       ));
