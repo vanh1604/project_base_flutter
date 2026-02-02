@@ -504,27 +504,15 @@ Main Navigation Screen
 
 | File | Nội Dung | Dành Cho |
 |------|----------|----------|
-| **[ARCHITECTURE_DETAILED.md](ARCHITECTURE_DETAILED.md)** | Kiến trúc chi tiết, BLoC pattern đầy đủ, code examples | Developers muốn hiểu sâu |
-| **[ARCHITECTURE.md](ARCHITECTURE.md)** | Overview về architecture, patterns | Quick reference |
-| **[FEATURES_SCREENS_GUIDE.md](FEATURES_SCREENS_GUIDE.md)** | Hướng dẫn tạo features và screens mới | Developers adding features |
+| **[PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md)** | Chi tiết cấu trúc project và vai trò từng folder | Developers muốn hiểu codebase |
+| **README.md** | Tổng quan về project, architecture và hướng dẫn | Quick start guide |
 
-### Đọc Gì Trước?
+### Key Topics trong PROJECT_STRUCTURE.md
 
-1. **Người mới**: Đọc **README.md** này trước
-2. **Hiểu architecture**: Đọc **ARCHITECTURE.md**
-3. **Hiểu chi tiết code**: Đọc **ARCHITECTURE_DETAILED.md**
-4. **Thêm features**: Đọc **FEATURES_SCREENS_GUIDE.md**
-
-### Key Topics trong ARCHITECTURE_DETAILED.md
-
-- ✅ Clean Architecture 3 layers chi tiết
-- ✅ BLoC Pattern với flow diagrams
-- ✅ Entity vs Model - Tại sao tách biệt?
-- ✅ Dependency Injection với GetIt
-- ✅ Error Handling với Either type
-- ✅ Data flow từ UI → API → UI
-- ✅ Component-Based Architecture
-- ✅ Best practices & Testing strategies
+- ✅ Cấu trúc folder chi tiết
+- ✅ Vai trò của từng thư mục
+- ✅ Quy tắc tổ chức code
+- ✅ Best practices cho project structure
 
 ---
 
@@ -647,7 +635,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ### Có câu hỏi?
 
-- 📖 Đọc [ARCHITECTURE_DETAILED.md](ARCHITECTURE_DETAILED.md)
+- 📖 Đọc [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) để hiểu rõ cấu trúc project
 - 🐛 Report bugs: [GitHub Issues](https://github.com/your-repo/issues)
 - 💬 Discussions: [GitHub Discussions](https://github.com/your-repo/discussions)
 
