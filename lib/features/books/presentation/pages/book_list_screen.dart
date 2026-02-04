@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../core/di/injection_container.dart';
-import '../../../core/widgets/widgets.dart';
-import '../../../features/books/presentation/bloc/books_bloc.dart';
-import '../../../features/books/presentation/bloc/books_event.dart';
-import '../../../features/books/presentation/bloc/books_state.dart';
-import '../../../features/books/presentation/widgets/book_card.dart';
-import '../../../features/books/presentation/widgets/book_list_shimmer.dart';
-import '../../../core/widgets/connected/search_bar/search_bloc.dart';
-import '../../../core/widgets/connected/search_bar/search_event.dart';
-import '../../../core/widgets/connected/search_bar/search_state.dart';
-import '../../../core/widgets/connected/search_bar/search_bar_widget.dart';
-import '../../../features/books/presentation/pages/book_details_screen.dart';
+import '../../../../core/injections/service_locator.dart';
+import '../../../../core/widgets/widgets.dart';
+import '../bloc/books_bloc.dart';
+import '../bloc/books_event.dart';
+import '../bloc/books_state.dart';
+import '../widgets/book_card.dart';
+import '../widgets/book_list_shimmer.dart';
+import '../../../../core/widgets/connected/search_bar/search_bloc.dart';
+import '../../../../core/widgets/connected/search_bar/search_event.dart';
+import '../../../../core/widgets/connected/search_bar/search_state.dart';
+import '../../../../core/widgets/connected/search_bar/search_bar_widget.dart';
+import 'book_details_screen.dart';
 
 /// Composite Screen: Uses Books feature + Search component
 ///

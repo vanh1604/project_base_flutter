@@ -1,878 +1,735 @@
-# Project Structure - Hybrid Architecture
+# PROJECT STRUCTURE - Clean Architecture với MVVM + BLoC
 
-**Version:** 1.0
-**Date:** 2026-02-02
-**Architecture:** MVVM + BLoC + Hybrid Architecture (Folder Organization)
+Created: February 4, 2026
 
-## Overview
+## Tổng quan (Overview)
 
-This project follows **MVVM + BLoC Pattern** with **Hybrid Architecture** for folder organization. The architecture consists of **2 main layers**:
+Dự án này được xây dựng dựa trên kiến trúc **Clean Architecture** kết hợp **MVVM (Model-View-ViewModel)** với **BLoC (Business Logic Component)** theo cấu trúc **Feature-First**. Mục tiêu là tạo ra một ứng dụng có khả năng:
 
-1. **Data Layer**: Data management (Models, DataSources, Repositories)
-2. **Presentation Layer**: UI & State Management (BLoC, Pages, Widgets)
+- **Bảo trì cao:** Cấu trúc rõ ràng, dễ mở rộng
+- **Dễ kiểm thử:** "Testable by Design" - mọi thành phần kiểm chứng độc lập
+- **Mở rộng đội ngũ:** Cấu trúc Feature-First giảm xung đột code
 
-**Key Principles:**
-- ✅ BLoC Pattern for state management
-- ✅ Repository Pattern for data access
-- ✅ Hybrid Architecture for folder organization (Component-Based + Feature-First)
-- ✅ Screens COMPOSE FROM features - features remain independent and reusable
+## Kiến trúc 3 Layers (Three-Tier Architecture)
+
+Kiến trúc tuân thủ nguyên tắc **Dependency Rule**: Sự phụ thuộc chỉ đi từ ngoài vào trong (Outside → Inside).
+
+```
+┌─────────────────────────────────────────────────────────┐
+│         PRESENTATION LAYER (UI & State)                 │
+│  - Widgets, Pages                                       │
+│  - BLoC/Cubit (ViewModel)                              │
+│  - User Interaction                                     │
+└────────────────────┬────────────────────────────────────┘
+                     │ depends on ↓
+┌────────────────────▼────────────────────────────────────┐
+│         DOMAIN LAYER (Business Logic)                   │
+│  - Entities (Pure Dart Objects)                        │
+│  - Repository Interfaces                               │
+│  - Use Cases (Interactors)                             │
+└────────────────────┬────────────────────────────────────┘
+                     │ depends on ↓
+┌────────────────────▼────────────────────────────────────┐
+│         DATA LAYER (Infrastructure)                     │
+│  - Repository Implementations                          │
+│  - Data Models (JSON Parsing)                          │
+│  - Data Sources (API, Local DB)                        │
+└─────────────────────────────────────────────────────────┘
+```
+
+### Layer Responsibilities
+
+| Layer | Trách nhiệm | Đặc điểm |
+|-------|------------|----------|
+| **Presentation** | Hiển thị UI và quản lý trạng thái | - BLoC nhận Events, phát ra States<br>- View lắng nghe States và rebuild<br>- Không chứa logic nghiệp vụ |
+| **Domain** | Chứa logic nghiệp vụ cốt lõi | - Hoàn toàn độc lập với Flutter<br>- Không biết về UI, Database, API<br>- Entities là POJO (Plain Old Dart Objects) |
+| **Data** | Cung cấp dữ liệu cho Domain | - Giao tiếp với API, Database<br>- Parse JSON ↔ Models<br>- Implement Repository Interfaces |
 
 ---
 
-## Folder Structure
+## Cấu trúc Thư mục Tổng thể (Project Structure)
 
 ```
 lib/
-├── core/                           # 🔧 Shared utilities & components
-│   ├── constants/                  # App-wide constants
-│   │   └── api_constants.dart
-│   ├── di/                         # Dependency Injection (GetIt)
-│   │   └── injection_container.dart
-│   ├── network/                    # HTTP client & interceptors
-│   │   ├── dio_client.dart
-│   │   └── auth_interceptor.dart
-│   ├── errors/                     # Error handling
-│   │   ├── exceptions.dart         # Technical errors (Data Layer)
-│   │   └── failures.dart           # Business errors (Presentation)
-│   └── widgets/                    # Reusable widgets
-│       ├── connected/              # Widgets WITH API calls (NO domain)
-│       │   └── search_bar/         # Search component with BLoC
-│       │       ├── search_bar_widget.dart
-│       │       ├── search_bloc.dart
-│       │       ├── search_event.dart
-│       │       └── search_state.dart
-│       ├── presentational/         # Pure UI widgets (NO API)
-│       │   ├── buttons/
-│       │   │   ├── app_button.dart
-│       │   │   └── icon_button_custom.dart
-│       │   ├── cards/
-│       │   │   └── base_card.dart
-│       │   ├── common/
-│       │   │   ├── empty_state_widget.dart
-│       │   │   └── error_widget_custom.dart
-│       │   ├── inputs/
-│       │   │   └── text_field_custom.dart
-│       │   └── loading/
-│       │       └── loading_indicator.dart
-│       └── widgets.dart            # Barrel export
+├── main_common.dart              # Cấu hình khởi chạy chung
+├── main_dev.dart                 # Entry point môi trường Development
+├── main_prod.dart                # Entry point môi trường Production
 │
-├── features/                       # 🎯 Business Features (MVVM + BLoC)
-│   └── books/                      # 📚 Books Feature (ONLY real feature)
-│       ├── data/                   # DATA LAYER
-│       │   ├── datasources/
-│       │   │   └── books_remote_datasource.dart  # API calls
-│       │   ├── models/
-│       │   │   └── book_model.dart               # Business object + Data transfer
-│       │   └── repositories/
-│       │       └── books_repository.dart         # Concrete repository
-│       └── presentation/           # PRESENTATION LAYER
-│           ├── bloc/               # BLoC (State Management)
-│           │   ├── books_event.dart
-│           │   ├── books_state.dart
-│           │   └── books_bloc.dart
-│           ├── pages/              # Simple screens (1 feature only)
-│           │   └── book_details_screen.dart
-│           └── widgets/            # Feature-specific widgets
-│               ├── book_card.dart
-│               ├── book_list_shimmer.dart
-│               └── stats/          # Stats widget (aggregates Books data)
-│                   ├── stats_bloc.dart
-│                   ├── stats_event.dart
-│                   └── stats_state.dart
+├── app/                          # Cấu hình toàn cục ứng dụng
+│   ├── app.dart                  # Root Widget (MaterialApp/CupertinoApp)
+│   ├── app_bloc_observer.dart    # Giám sát toàn bộ Events/States (Logging)
+│   ├── theme/                    # Design System
+│   │   ├── app_colors.dart       # Bảng màu ứng dụng
+│   │   ├── app_text_styles.dart  # Typography system
+│   │   └── app_theme.dart        # ThemeData configuration
+│   └── routes/                   # Cấu hình điều hướng trung tâm
+│       ├── app_router.dart       # Router configuration (GoRouter/AutoRoute)
+│       └── app_routes.dart       # Định nghĩa tên routes (constants)
 │
-├── screens/                        # 📱 Composite Screens (≥2 features)
-│   └── composite/
-│       ├── dashboard/
-│       │   └── dashboard_screen.dart    # Books + Search + Stats
-│       └── book_list/
-│           └── book_list_screen.dart    # Books + Search
+├── core/                         # Shared Kernel - Code dùng chung
+│   ├── config/                   # Cấu hình môi trường
+│   │   └── flavor_config.dart    # Dev/Staging/Production configs
+│   │
+│   ├── constants/                # Hằng số hệ thống
+│   │   ├── api_constants.dart    # API URLs, endpoints
+│   │   └── app_constants.dart    # Timeout, limits, defaults
+│   │
+│   ├── error/                    # Hệ thống xử lý lỗi
+│   │   ├── exceptions.dart       # Lỗi kỹ thuật (ServerException, CacheException)
+│   │   └── failures.dart         # Lỗi nghiệp vụ (ServerFailure, NetworkFailure)
+│   │
+│   ├── injections/               # Dependency Injection
+│   │   └── service_locator.dart  # GetIt/Injectable configuration
+│   │
+│   ├── network/                  # Network Layer cơ sở
+│   │   ├── api_client.dart       # Dio/Http Client configuration
+│   │   ├── interceptors/         # HTTP Interceptors
+│   │   │   ├── auth_interceptor.dart
+│   │   │   └── logging_interceptor.dart
+│   │   └── network_info.dart     # Internet connection checker
+│   │
+│   ├── usecases/                 # Base UseCase interface
+│   │   └── usecase.dart          # Abstract class UseCase<Type, Params>
+│   │
+│   ├── utils/                    # Tiện ích bổ trợ
+│   │   ├── date_converter.dart   # Date formatting utilities
+│   │   ├── input_validator.dart  # Input validation helpers
+│   │   └── extensions/           # Dart extensions
+│   │       ├── string_ext.dart
+│   │       ├── context_ext.dart
+│   │       └── date_ext.dart
+│   │
+│   └── widgets/                  # Shared Widgets (Atomic Design)
+│       ├── app_button.dart
+│       ├── app_text_field.dart
+│       ├── loading_indicator.dart
+│       └── error_widget.dart
 │
-└── main.dart                       # App entry point
+├── features/                     # Feature Modules (Domain-Driven)
+│   ├── books/                    # Ví dụ: Module quản lý sách
+│   ├── auth/                     # Module xác thực
+│   ├── home/                     # Module trang chủ
+│   └── profile/                  # Module hồ sơ cá nhân
+│
+└── l10n/                         # Localization - Đa ngôn ngữ
+    ├── arb/                      # Application Resource Bundle files
+    │   ├── app_en.arb           # English translations
+    │   └── app_vi.arb           # Vietnamese translations
+    └── l10n.dart                 # Generated localization delegates
 ```
 
 ---
 
-## Architecture Layers Explained
+## Cấu trúc Chi tiết Feature Module
 
-### Layer 1: Data Layer (Data Management)
+Mỗi feature là một **vertical slice** (lát cắt dọc) của ứng dụng, chứa đầy đủ 3 tầng Clean Architecture. Điều này đảm bảo tính đóng gói và khả năng tách module thành package riêng biệt.
 
-**Vai trò:** Quản lý data từ API, Database, Cache
+### Ví dụ: Feature Books
 
-**Components:**
-- **DataSources**: API calls, local storage
-- **Models**: Data models với JSON parsing (serve as both business objects và DTOs)
-- **Repositories**: Concrete repository classes (NOT interfaces)
-
-**Đặc điểm:**
-- ✅ Handle API calls, caching
-- ✅ Handle technical errors (Exceptions)
-- ✅ Repository pattern - concrete classes
-- ✅ Models ARE business objects (không tách Entity riêng)
-
-**Example:**
-```dart
-// Data Source
-class BooksRemoteDataSource {
-  Future<List<BookModel>> getAllBooks() async {
-    // API call
-  }
-}
-
-// Repository (Concrete class)
-class BooksRepository {
-  final BooksRemoteDataSource remoteDataSource;
-
-  Future<Either<Failure, List<BookModel>>> getAllBooks() async {
-    try {
-      final books = await remoteDataSource.getAllBooks();
-      return Right(books);
-    } catch (e) {
-      return Left(ServerFailure());
-    }
-  }
-}
-```
-
----
-
-### Layer 2: Presentation Layer (UI & State Management)
-
-**Vai trò:** UI components và BLoC state management
-
-**Components:**
-- **BLoC**: Business logic & state management (Events, States, BLoC)
-- **Pages**: Full screens
-- **Widgets**: Reusable UI components
-
-**Đặc điểm:**
-- ✅ BLoC Pattern cho state management
-- ✅ BLoC gọi Repository trực tiếp (NO Use Cases layer)
-- ✅ Reactive UI với Streams
-- ✅ Handle business errors (Failures)
-
-**Example:**
-```dart
-// BLoC
-class BooksBloc extends Bloc<BooksEvent, BooksState> {
-  final BooksRepository repository;
-
-  Future<void> _onLoadBooks(...) async {
-    emit(BooksLoading());
-    final result = await repository.getAllBooks();
-    result.fold(
-      (failure) => emit(BooksError(failure.message)),
-      (books) => emit(BooksLoaded(books)),
-    );
-  }
-}
-
-// View
-BlocBuilder<BooksBloc, BooksState>(
-  builder: (context, state) {
-    if (state is BooksLoading) return LoadingIndicator();
-    if (state is BooksLoaded) return BooksList(state.books);
-    if (state is BooksError) return ErrorWidget(state.message);
-  },
-)
-```
-
----
-
-## Decision Rules
-
-### Rule #1: Screen Classification
-
-**Count the number of BLoCs used in the screen:**
-
-```
-Screen dùng bao nhiêu BLoCs?
-│
-├── 0 BLoCs (Stateless) → SIMPLE SCREEN
-│   └── Location: features/[name]/presentation/pages/
-│
-├── 1 BLoC → SIMPLE SCREEN
-│   └── Location: features/[name]/presentation/pages/
-│
-└── ≥2 BLoCs → COMPOSITE SCREEN
-    └── Location: screens/composite/[name]/
-```
-
-**How to count:**
-Look at `BlocProvider` or `MultiBlocProvider` - count the number of BLoC providers.
-
-**Current Examples:**
-
-| Screen | BLoCs Used | Count | Location |
-|--------|-----------|-------|----------|
-| **BookDetailsScreen** | None (Stateless) | 0 | `features/books/presentation/pages/` |
-| **DashboardScreen** | BooksBloc + SearchBloc + StatsBloc | 3 | `screens/composite/dashboard/` |
-| **BookListScreen** | BooksBloc + SearchBloc | 2 | `screens/composite/book_list/` |
-
----
-
-### Rule #2: Component vs Feature
-
-**Does it have a business domain?**
-
-```
-Has independent business domain?
-(models, repositories, datasources)
-│
-├── YES → FEATURE
-│   └── Location: features/[name]/
-│   └── Structure: data/ + presentation/
-│
-└── NO → COMPONENT
-    │
-    ├── Has API call + BLoC? → CONNECTED COMPONENT
-    │   └── Location: core/widgets/connected/[name]/
-    │
-    ├── Aggregates feature data? → FEATURE WIDGET
-    │   └── Location: features/[name]/presentation/widgets/
-    │
-    └── Pure UI only? → PRESENTATIONAL COMPONENT
-        └── Location: core/widgets/presentational/[category]/
-```
-
-**Current Examples:**
-
-| Name | Type | Reason | Location |
-|------|------|--------|----------|
-| **Books** | Feature | Has business domain (Book model, Repository, DataSource) | `features/books/` |
-| **Search** | Connected Component | Has BLoC but NO business domain, reusable | `core/widgets/connected/search_bar/` |
-| **Stats** | Feature Widget | Aggregates Books data, specific to Books feature | `features/books/presentation/widgets/stats/` |
-| **AppButton** | Presentational Component | Pure UI, no API | `core/widgets/presentational/buttons/` |
-
----
-
-## Core Folders Explained
-
-### core/constants/
-App-wide constants và configuration
-
-**Files:**
-- `api_constants.dart` - API URLs, endpoints, timeouts
-
-### core/di/
-Dependency Injection setup với GetIt
-
-**Files:**
-- `injection_container.dart` - Register all dependencies
-
-**Pattern:**
-```dart
-// Singleton
-sl.registerLazySingleton(() => http.Client());
-sl.registerLazySingleton(() => BooksRepository(...));
-
-// Factory (new instance mỗi lần)
-sl.registerFactory(() => BooksBloc(...));
-```
-
-### core/network/
-HTTP client và interceptors
-
-**Files:**
-- `dio_client.dart` - Configured Dio client
-- `auth_interceptor.dart` - Authentication interceptor
-
-### core/errors/
-Error handling classes
-
-**Files:**
-- `exceptions.dart` - Technical errors cho Data Layer (ServerException, CacheException)
-- `failures.dart` - Business errors cho Presentation (ServerFailure, CacheFailure)
-
-**Pattern:**
-```dart
-// Data Layer throws Exceptions
-throw ServerException();
-
-// Repository catches và returns Failures
-return Left(ServerFailure());
-```
-
-### core/widgets/
-Reusable widgets
-
-#### connected/
-Widgets WITH API calls nhưng KHÔNG có business domain
-
-**Current:**
-- `search_bar/` - Search component với SearchBloc
-
-**Characteristics:**
-- ✅ Has BLoC for state management
-- ✅ Makes API calls hoặc uses repositories
-- ❌ NO business domain (no models/repositories of its own)
-- ✅ Reusable across features
-
-#### presentational/
-Pure UI widgets, NO API calls
-
-**Categories:**
-- `buttons/` - AppButton, IconButtonCustom
-- `cards/` - BaseCard
-- `common/` - ErrorWidgetCustom, EmptyStateWidget
-- `inputs/` - TextFieldCustom
-- `loading/` - LoadingIndicator
-
-**Characteristics:**
-- ✅ Pure UI components
-- ❌ NO API calls
-- ❌ NO BLoC
-- ✅ Highly reusable
-
----
-
-## Features Folder Structure
-
-### When to Create a Feature?
-
-Create a feature khi có **business domain** với:
-- ✅ Business models (Book, User, Order, etc.)
-- ✅ Data sources (API calls, local storage)
-- ✅ Repositories (data access logic)
-- ✅ Business logic (BLoC)
-
-### Feature Structure (2 Layers)
-
-```
-features/
-└── [feature_name]/
-    ├── data/                    # DATA LAYER
-    │   ├── datasources/         # API calls, local storage
-    │   ├── models/              # Data models (JSON parsing)
-    │   └── repositories/        # Concrete repositories
-    └── presentation/            # PRESENTATION LAYER
-        ├── bloc/                # BLoC (Events, States, BLoC)
-        ├── pages/               # Simple screens (1 BLoC only)
-        └── widgets/             # Feature-specific widgets
-```
-
-### Current Feature: Books
-
-**Structure:**
 ```
 features/books/
-├── data/
-│   ├── datasources/
-│   │   └── books_remote_datasource.dart
-│   ├── models/
-│   │   └── book_model.dart
-│   └── repositories/
-│       └── books_repository.dart
-└── presentation/
-    ├── bloc/
-    │   ├── books_event.dart
-    │   ├── books_state.dart
-    │   └── books_bloc.dart
-    ├── pages/
-    │   └── book_details_screen.dart
-    └── widgets/
-        ├── book_card.dart
-        ├── book_list_shimmer.dart
-        └── stats/
-            ├── stats_bloc.dart
-            ├── stats_event.dart
-            └── stats_state.dart
-```
-
-**Why Stats is a Feature Widget?**
-- ❌ NOT a separate feature (no own data/repositories)
-- ✅ Aggregates Books data
-- ✅ Specific to Books feature
-- ✅ Has own BLoC for stats calculation
-
----
-
-## Screens Folder Structure
-
-### When to Use screens/composite/?
-
-Use `screens/composite/` when screen uses **≥2 BLoCs**
-
-### Current Composite Screens
-
-#### 1. DashboardScreen
-**Location:** `screens/composite/dashboard/dashboard_screen.dart`
-
-**Uses 3 BLoCs:**
-1. `BooksBloc` - Books feature
-2. `SearchBloc` - Search component
-3. `StatsBloc` - Stats widget
-
-**Structure:**
-```dart
-MultiBlocProvider(
-  providers: [
-    BlocProvider(create: (_) => sl<BooksBloc>()..add(LoadBooksEvent())),
-    BlocProvider(create: (_) => SearchBloc(repository: sl())),
-    BlocProvider(create: (_) => StatsBloc()..add(LoadStatsEvent())),
-  ],
-  child: DashboardScreen(),
-)
-```
-
-#### 2. BookListScreen
-**Location:** `screens/composite/book_list/book_list_screen.dart`
-
-**Uses 2 BLoCs:**
-1. `BooksBloc` - Books feature
-2. `SearchBloc` - Search component
-
-**Structure:**
-```dart
-MultiBlocProvider(
-  providers: [
-    BlocProvider(create: (_) => sl<BooksBloc>()..add(LoadBooksEvent())),
-    BlocProvider(create: (_) => SearchBloc(repository: sl())),
-  ],
-  child: BookListScreen(),
-)
+│
+├── data/                                   # DATA LAYER
+│   ├── datasources/                        # Nguồn dữ liệu thô
+│   │   ├── book_remote_data_source.dart    # API calls (Retrofit/Dio)
+│   │   └── book_local_data_source.dart     # Local storage (Hive/Isar/SQLite)
+│   │
+│   ├── models/                             # Data Transfer Objects (DTO)
+│   │   └── book_model.dart                 # extends BookEntity + JSON parsing
+│   │
+│   └── repositories/                       # Repository Implementation
+│       └── book_repository_impl.dart       # implements IBookRepository
+│
+├── domain/                                 # DOMAIN LAYER
+│   ├── entities/                           # Business Objects
+│   │   └── book_entity.dart                # Pure Dart class (Equatable, NO JSON)
+│   │
+│   ├── repositories/                       # Repository Interfaces
+│   │   └── i_book_repository.dart          # Abstract class (Contract)
+│   │
+│   └── usecases/                           # Business Logic (Interactors)
+│       ├── get_books_usecase.dart          # Logic lấy danh sách sách
+│       ├── get_book_detail_usecase.dart    # Logic lấy chi tiết sách
+│       ├── add_book_usecase.dart           # Logic thêm sách mới
+│       └── delete_book_usecase.dart        # Logic xóa sách
+│
+└── presentation/                           # PRESENTATION LAYER
+    ├── bloc/                               # State Management (ViewModel)
+    │   ├── book_bloc.dart                  # Logic xử lý Event → State
+    │   ├── book_event.dart                 # Events (LoadBooks, FilterBooks)
+    │   └── book_state.dart                 # States (Initial, Loading, Loaded, Error)
+    │
+    ├── pages/                              # Screens
+    │   ├── book_list_page.dart             # Màn hình danh sách
+    │   └── book_detail_page.dart           # Màn hình chi tiết
+    │
+    └── widgets/                            # Feature-specific widgets
+        ├── book_card.dart                  # Widget hiển thị book item
+        └── book_filter_bar.dart            # Widget filter/search
 ```
 
 ---
 
-## Best Practices
+## Chi tiết Từng Layer
 
-### ✅ DO
+### 1. DOMAIN LAYER - Lõi Bất biến (The Immutable Core)
 
-**Architecture:**
-- ✅ Use 2-layer architecture (Data + Presentation)
-- ✅ Use BLoC for ALL state management
-- ✅ Use Repository pattern for data access
-- ✅ Use Either type (dartz) for error handling
-- ✅ Models serve as both business objects và DTOs
+Domain Layer là **trái tim** của ứng dụng, chứa toàn bộ logic nghiệp vụ. Layer này hoàn toàn độc lập với Flutter, UI, Database, hay Network.
 
-**Organization:**
-- ✅ Count BLoCs to determine screen location
-- ✅ Keep features independent from screens
-- ✅ Use composition over inheritance
-- ✅ Place reusable widgets in `core/widgets/`
-- ✅ Create features only for business domains
+#### 1.1. Entities (Thực thể)
 
-**Naming:**
-- ✅ Use descriptive names (BooksBloc, SearchBloc)
-- ✅ Follow Dart naming conventions
-- ✅ Use barrel exports (widgets.dart)
+**Vai trò:** Đại diện cho các đối tượng nghiệp vụ cốt lõi.
 
-### ❌ DON'T
+**Đặc điểm:**
+- Pure Dart classes (POJO - Plain Old Dart Objects)
+- Sử dụng `Equatable` để so sánh giá trị (value equality)
+- **KHÔNG** chứa logic `fromJson` / `toJson`
+- **KHÔNG** phụ thuộc vào bất kỳ package nào khác ngoài Dart core
 
-**Architecture:**
-- ❌ Don't create Domain layer (no Use Cases, no Entities)
-- ❌ Don't separate Entity và Model (Models ARE business objects)
-- ❌ Don't use percentage-based rules for screen classification
-
-**Organization:**
-- ❌ Don't make screens "belong to" features
-- ❌ Don't create features for every widget with API calls
-- ❌ Don't couple features to specific screens
-- ❌ Don't put composite screens in features/
-
-**Code:**
-- ❌ Don't mix business logic in widgets
-- ❌ Don't access repositories directly from widgets
-- ❌ Don't skip error handling
-
----
-
-## Migration Guide
-
-### Creating a New Screen
-
-**Step 1: Count BLoCs**
+**Ví dụ:**
 ```dart
-// Check MultiBlocProvider
-MultiBlocProvider(
-  providers: [
-    BlocProvider(create: (_) => FeatureABloc()),   // 1
-    BlocProvider(create: (_) => FeatureBBloc()),   // 2
-  ],
-  child: MyScreen(),
-)
+import 'package:equatable/equatable.dart';
+
+class BookEntity extends Equatable {
+  final String id;
+  final String title;
+  final String author;
+  final int publishYear;
+
+  const BookEntity({
+    required this.id,
+    required this.title,
+    required this.author,
+    required this.publishYear,
+  });
+
+  @override
+  List<Object?> get props => [id, title, author, publishYear];
+}
 ```
 
-**Step 2: Determine Location**
-- **0-1 BLoC** → Simple Screen → `features/[feature_name]/presentation/pages/`
-- **≥2 BLoCs** → Composite Screen → `screens/composite/[screen_name]/`
+#### 1.2. Repositories (Interfaces)
 
-**Step 3: Create File**
+**Vai trò:** Định nghĩa ranh giới (boundary) giữa Domain và Data Layer.
+
+**Đặc điểm:**
+- Là `abstract class` (Interface/Contract)
+- Trả về `Future<Either<Failure, Type>>` (Functional Error Handling)
+- Không chứa implementation, chỉ định nghĩa hành vi
+
+**Tại sao dùng Either?**
+- Buộc xử lý cả hai trường hợp: Success và Failure
+- Loại bỏ việc ném Exception (không dùng try-catch ở Presentation)
+- Type-safe error handling
+
+**Ví dụ:**
 ```dart
-// Simple screen
-features/books/presentation/pages/my_simple_screen.dart
+import 'package:fpdart/fpdart.dart';
+import '../entities/book_entity.dart';
 
-// Composite screen
-screens/composite/my_composite_screen/my_composite_screen.dart
+abstract class IBookRepository {
+  Future<Either<Failure, List<BookEntity>>> getBooks();
+  Future<Either<Failure, BookEntity>> getBookById(String id);
+  Future<Either<Failure, Unit>> addBook(BookEntity book);
+  Future<Either<Failure, Unit>> deleteBook(String id);
+}
 ```
 
-### Creating a New Feature
+#### 1.3. Use Cases (Interactors)
 
-**Step 1: Check if it's truly a feature**
-- ✅ Has business domain? (models, repositories, datasources)
-- ✅ Has independent business logic?
-- ✅ Will be used across multiple screens?
+**Vai trò:** Đóng gói một hành động nghiệp vụ cụ thể.
 
-**Step 2: Create folder structure**
-```
-features/
-└── [new_feature]/
-    ├── data/
-    │   ├── datasources/
-    │   │   └── [feature]_remote_datasource.dart
-    │   ├── models/
-    │   │   └── [model]_model.dart
-    │   └── repositories/
-    │       └── [feature]_repository.dart
-    └── presentation/
-        ├── bloc/
-        │   ├── [feature]_event.dart
-        │   ├── [feature]_state.dart
-        │   └── [feature]_bloc.dart
-        ├── pages/
-        └── widgets/
-```
+**Tại sao cần Use Case?**
+- Giúp BLoC trở nên gọn nhẹ, chỉ cần gọi `useCase.call()`
+- Tái sử dụng logic nghiệp vụ ở nhiều BLoC khác nhau
+- Tách biệt logic nghiệp vụ khỏi Presentation
 
-**Step 3: Register dependencies in DI**
+**Ví dụ:**
 ```dart
-// injection_container.dart
-// Data Sources
-sl.registerLazySingleton(() => FeatureRemoteDataSource(client: sl()));
+class GetBooksUseCase extends UseCase<List<BookEntity>, NoParams> {
+  final IBookRepository repository;
 
-// Repositories
-sl.registerLazySingleton(() => FeatureRepository(dataSource: sl()));
+  GetBooksUseCase(this.repository);
 
-// BLoCs
-sl.registerFactory(() => FeatureBloc(repository: sl()));
-```
-
-### Creating a Reusable Component
-
-**Step 1: Determine component type**
-
-**Has API call?**
-- YES → Connected Component → `core/widgets/connected/[name]/`
-- NO → Presentational Component → `core/widgets/presentational/[category]/`
-
-**Step 2: Create structure**
-
-**Connected Component:**
-```
-core/widgets/connected/
-└── [component_name]/
-    ├── [component]_widget.dart
-    ├── [component]_bloc.dart
-    ├── [component]_event.dart
-    └── [component]_state.dart
-```
-
-**Presentational Component:**
-```
-core/widgets/presentational/
-└── [category]/
-    └── [component]_widget.dart
+  @override
+  Future<Either<Failure, List<BookEntity>>> call(NoParams params) async {
+    return await repository.getBooks();
+  }
+}
 ```
 
 ---
 
-## Data Flow
+### 2. DATA LAYER - Cơ sở Hạ tầng (The Infrastructure)
 
-### Complete Data Flow (API → UI)
+Data Layer là "người phục vụ" cho Domain Layer. Mọi thay đổi về công nghệ (REST → GraphQL, SQLite → Hive) chỉ nên gói gọn trong layer này.
 
-```
-User Action (Tap button)
-    ↓
-Widget dispatches Event
-    ↓
-BLoC receives Event
-    ↓
-BLoC calls Repository
-    ↓
-Repository calls DataSource
-    ↓
-DataSource makes API call
-    ↓
-API returns JSON
-    ↓
-DataSource parses to Model
-    ↓
-Repository returns Either<Failure, Model>
-    ↓
-BLoC emits new State
-    ↓
-Widget rebuilds with new data
-```
+#### 2.1. Models (Data Transfer Objects)
 
-### Example: Loading Books
+**Vai trò:** Mở rộng Entity với khả năng serialize/deserialize.
 
+**Đặc điểm:**
+- `extends` Entity tương ứng
+- Chứa logic `fromJson` / `toJson`
+- Sử dụng `json_serializable` để tự động sinh code
+
+**Ví dụ:**
 ```dart
-// 1. User action
-ElevatedButton(
-  onPressed: () {
-    context.read<BooksBloc>().add(LoadBooksEvent());
-  },
-)
+import 'package:json_annotation/json_annotation.dart';
+import '../../domain/entities/book_entity.dart';
 
-// 2. BLoC receives event
-class BooksBloc extends Bloc<BooksEvent, BooksState> {
-  Future<void> _onLoadBooks(...) async {
-    emit(BooksLoading());                          // 3. Emit loading state
-    final result = await repository.getAllBooks(); // 4. Call repository
+part 'book_model.g.dart';
+
+@JsonSerializable()
+class BookModel extends BookEntity {
+  const BookModel({
+    required String id,
+    required String title,
+    required String author,
+    required int publishYear,
+  }) : super(
+          id: id,
+          title: title,
+          author: author,
+          publishYear: publishYear,
+        );
+
+  factory BookModel.fromJson(Map<String, dynamic> json) =>
+      _$BookModelFromJson(json);
+
+  Map<String, dynamic> toJson() => _$BookModelToJson(this);
+}
+```
+
+#### 2.2. Data Sources (Nguồn dữ liệu)
+
+**Vai trò:** Thực hiện các giao tiếp vật lý với API/Database.
+
+##### Remote Data Source (API)
+- Sử dụng Retrofit hoặc Dio
+- Bắt các HTTP Exception và ném ra custom Exception
+
+**Ví dụ:**
+```dart
+abstract class BookRemoteDataSource {
+  Future<List<BookModel>> getBooks();
+  Future<BookModel> getBookById(String id);
+}
+
+class BookRemoteDataSourceImpl implements BookRemoteDataSource {
+  final ApiClient client;
+
+  BookRemoteDataSourceImpl(this.client);
+
+  @override
+  Future<List<BookModel>> getBooks() async {
+    try {
+      final response = await client.get('/books');
+      return (response.data as List)
+          .map((json) => BookModel.fromJson(json))
+          .toList();
+    } on DioException catch (e) {
+      throw ServerException(message: e.message);
+    }
+  }
+}
+```
+
+##### Local Data Source (Cache/Database)
+- Sử dụng Hive, Isar, SQLite, hoặc SharedPreferences
+- Bắt các Cache Exception
+
+#### 2.3. Repository Implementation
+
+**Vai trò:** Phối hợp dữ liệu từ nhiều nguồn và xử lý lỗi.
+
+**Logic:**
+1. Kiểm tra kết nối mạng
+2. Nếu có mạng: gọi Remote Data Source → lưu vào Local → return
+3. Nếu không có mạng: đọc từ Local Data Source
+4. Convert Exception → Failure
+5. Convert Model → Entity
+
+**Ví dụ:**
+```dart
+class BookRepositoryImpl implements IBookRepository {
+  final BookRemoteDataSource remoteDataSource;
+  final BookLocalDataSource localDataSource;
+  final NetworkInfo networkInfo;
+
+  BookRepositoryImpl({
+    required this.remoteDataSource,
+    required this.localDataSource,
+    required this.networkInfo,
+  });
+
+  @override
+  Future<Either<Failure, List<BookEntity>>> getBooks() async {
+    if (await networkInfo.isConnected) {
+      try {
+        final books = await remoteDataSource.getBooks();
+        await localDataSource.cacheBooks(books);
+        return Right(books); // Success
+      } on ServerException catch (e) {
+        return Left(ServerFailure(message: e.message)); // Failure
+      }
+    } else {
+      try {
+        final cachedBooks = await localDataSource.getCachedBooks();
+        return Right(cachedBooks);
+      } on CacheException {
+        return Left(CacheFailure());
+      }
+    }
+  }
+}
+```
+
+---
+
+### 3. PRESENTATION LAYER - Giao diện và Quản lý Trạng thái
+
+Presentation Layer là nơi MVVM + BLoC phát huy tác dụng, tách biệt hoàn toàn logic hiển thị khỏi UI.
+
+#### 3.1. BLoC (Business Logic Component) - ViewModel
+
+**Vai trò:** Quản lý State, xử lý Events, và giao tiếp với Domain Layer.
+
+**Luồng hoạt động:**
+1. View gửi **Event** → BLoC
+2. BLoC xử lý Event → gọi **UseCase**
+3. UseCase trả về kết quả
+4. BLoC emit **State** mới
+5. View lắng nghe State → rebuild UI
+
+**Đặc điểm:**
+- Sử dụng `freezed` để tạo Union Types cho State/Event
+- **KHÔNG** chứa `BuildContext`
+- **KHÔNG** gọi `Navigator` hay `ScaffoldMessenger` trực tiếp
+- Chỉ giao tiếp với Domain Layer thông qua Use Cases
+
+**Ví dụ Event:**
+```dart
+@freezed
+class BookEvent with _$BookEvent {
+  const factory BookEvent.loadBooks() = LoadBooks;
+  const factory BookEvent.filterBooks(String query) = FilterBooks;
+  const factory BookEvent.deleteBook(String id) = DeleteBook;
+}
+```
+
+**Ví dụ State:**
+```dart
+@freezed
+class BookState with _$BookState {
+  const factory BookState.initial() = Initial;
+  const factory BookState.loading() = Loading;
+  const factory BookState.loaded(List<BookEntity> books) = Loaded;
+  const factory BookState.error(String message) = Error;
+}
+```
+
+**Ví dụ BLoC:**
+```dart
+class BookBloc extends Bloc<BookEvent, BookState> {
+  final GetBooksUseCase getBooksUseCase;
+
+  BookBloc({required this.getBooksUseCase}) : super(const BookState.initial()) {
+    on<LoadBooks>(_onLoadBooks);
+  }
+
+  Future<void> _onLoadBooks(LoadBooks event, Emitter<BookState> emit) async {
+    emit(const BookState.loading());
+
+    final result = await getBooksUseCase(NoParams());
+
     result.fold(
-      (failure) => emit(BooksError(failure.message)),  // 5a. Error
-      (books) => emit(BooksLoaded(books)),             // 5b. Success
+      (failure) => emit(BookState.error(failure.message)),
+      (books) => emit(BookState.loaded(books)),
     );
   }
 }
-
-// 6. Widget rebuilds
-BlocBuilder<BooksBloc, BooksState>(
-  builder: (context, state) {
-    if (state is BooksLoading) return LoadingIndicator();
-    if (state is BooksLoaded) return BooksList(state.books);
-    if (state is BooksError) return ErrorWidget(state.message);
-  },
-)
 ```
 
----
+#### 3.2. Pages (Screens)
 
-## Quick Reference
+**Vai trò:** Hiển thị UI và phản ứng với State từ BLoC.
 
-### Screen Location Guide
+**Đặc điểm:**
+- Sử dụng `BlocProvider` để inject BLoC
+- Sử dụng `BlocBuilder` để rebuild UI khi State thay đổi
+- Sử dụng `BlocListener` cho side effects (navigation, snackbar)
+- Sử dụng `BlocConsumer` khi cần cả hai
 
-| BLoC Count | Screen Type | Location |
-|------------|-------------|----------|
-| 0 BLoCs (Stateless) | Simple Screen | `features/[name]/presentation/pages/` |
-| 1 BLoC | Simple Screen | `features/[name]/presentation/pages/` |
-| ≥2 BLoCs | Composite Screen | `screens/composite/[name]/` |
-
-### Component Location Guide
-
-| Component Type | Location |
-|---------------|----------|
-| Feature (has business domain) | `features/[name]/` |
-| Connected Component (API + BLoC, no domain) | `core/widgets/connected/[name]/` |
-| Feature Widget (aggregates feature data) | `features/[name]/presentation/widgets/` |
-| Presentational Component (pure UI) | `core/widgets/presentational/[category]/` |
-
-### File Naming Conventions
-
-| Type | Pattern | Example |
-|------|---------|---------|
-| BLoC | `[name]_bloc.dart` | `books_bloc.dart` |
-| Event | `[name]_event.dart` | `books_event.dart` |
-| State | `[name]_state.dart` | `books_state.dart` |
-| Model | `[name]_model.dart` | `book_model.dart` |
-| Repository | `[name]_repository.dart` | `books_repository.dart` |
-| DataSource | `[name]_datasource.dart` | `books_remote_datasource.dart` |
-| Screen | `[name]_screen.dart` | `dashboard_screen.dart` |
-| Widget | `[name]_widget.dart` | `search_bar_widget.dart` |
-
----
-
-## Common Patterns
-
-### Error Handling Pattern
-
+**Ví dụ:**
 ```dart
-// Data Layer - Throw Exceptions
-class BooksRemoteDataSource {
-  Future<List<BookModel>> getAllBooks() async {
-    try {
-      final response = await client.get(url);
-      if (response.statusCode == 200) {
-        return parseBooks(response.body);
-      } else {
-        throw ServerException();
-      }
-    } catch (e) {
-      throw ServerException();
-    }
-  }
-}
-
-// Repository - Convert to Failures
-class BooksRepository {
-  Future<Either<Failure, List<BookModel>>> getAllBooks() async {
-    try {
-      final books = await remoteDataSource.getAllBooks();
-      return Right(books);
-    } on ServerException {
-      return Left(ServerFailure('Failed to fetch books'));
-    }
-  }
-}
-
-// BLoC - Handle Failures
-Future<void> _onLoadBooks(...) async {
-  emit(BooksLoading());
-  final result = await repository.getAllBooks();
-  result.fold(
-    (failure) => emit(BooksError(failure.message)),
-    (books) => emit(BooksLoaded(books)),
-  );
-}
-```
-
-### Dependency Injection Pattern
-
-```dart
-// 1. Register in injection_container.dart
-Future<void> initializeDependencies() async {
-  // External
-  sl.registerLazySingleton(() => http.Client());
-
-  // Data Sources (Singleton)
-  sl.registerLazySingleton<BooksRemoteDataSource>(
-    () => BooksRemoteDataSourceImpl(client: sl()),
-  );
-
-  // Repositories (Singleton)
-  sl.registerLazySingleton<BooksRepository>(
-    () => BooksRepository(remoteDataSource: sl()),
-  );
-
-  // BLoCs (Factory - new instance each time)
-  sl.registerFactory(() => BooksBloc(repository: sl()));
-  sl.registerFactory(() => SearchBloc(repository: sl()));
-}
-
-// 2. Use in widgets
-class MyScreen extends StatelessWidget {
+class BookListPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return BlocProvider(
-      create: (_) => sl<BooksBloc>()..add(LoadBooksEvent()),
-      child: MyScreenView(),
+      create: (_) => getIt<BookBloc>()..add(const BookEvent.loadBooks()),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Books')),
+        body: BlocBuilder<BookBloc, BookState>(
+          builder: (context, state) {
+            return state.when(
+              initial: () => const SizedBox.shrink(),
+              loading: () => const LoadingIndicator(),
+              loaded: (books) => ListView.builder(
+                itemCount: books.length,
+                itemBuilder: (_, index) => BookCard(book: books[index]),
+              ),
+              error: (message) => ErrorWidget(message: message),
+            );
+          },
+        ),
+      ),
     );
   }
 }
 ```
 
-### BLoC Pattern
+#### 3.3. Widgets (Feature-specific)
 
+**Vai trò:** Các widget chỉ dùng cho feature cụ thể.
+
+**Nguyên tắc:**
+- Nếu widget dùng chung toàn app → đưa vào `core/widgets/`
+- Nếu widget chỉ dùng trong feature → giữ trong `features/[feature]/presentation/widgets/`
+
+---
+
+## Data Flow - Luồng Dữ liệu Chi tiết
+
+### Kịch bản: User nhấn nút "Load Books"
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│ 1. USER INTERACTION                                              │
+│    BookListPage → add(BookEvent.loadBooks())                     │
+└────────────────────────┬─────────────────────────────────────────┘
+                         ↓
+┌────────────────────────▼─────────────────────────────────────────┐
+│ 2. PRESENTATION LAYER (BLoC)                                     │
+│    BookBloc receives event                                       │
+│    → emit(BookState.loading())                                   │
+│    → call GetBooksUseCase(NoParams())                           │
+└────────────────────────┬─────────────────────────────────────────┘
+                         ↓
+┌────────────────────────▼─────────────────────────────────────────┐
+│ 3. DOMAIN LAYER (Use Case)                                       │
+│    GetBooksUseCase.call()                                        │
+│    → call IBookRepository.getBooks()                            │
+└────────────────────────┬─────────────────────────────────────────┘
+                         ↓
+┌────────────────────────▼─────────────────────────────────────────┐
+│ 4. DATA LAYER (Repository Implementation)                        │
+│    BookRepositoryImpl.getBooks()                                 │
+│    → Check network connection                                    │
+│    → Call BookRemoteDataSource.getBooks()                       │
+└────────────────────────┬─────────────────────────────────────────┘
+                         ↓
+┌────────────────────────▼─────────────────────────────────────────┐
+│ 5. DATA LAYER (Remote Data Source)                              │
+│    BookRemoteDataSource.getBooks()                               │
+│    → API call: GET /books                                        │
+│    → Parse JSON → List<BookModel>                               │
+│    → Return to Repository                                        │
+└────────────────────────┬─────────────────────────────────────────┘
+                         ↓
+┌────────────────────────▼─────────────────────────────────────────┐
+│ 6. DATA LAYER (Repository - Return Path)                        │
+│    BookRepositoryImpl receives List<BookModel>                   │
+│    → Cache to LocalDataSource                                    │
+│    → Convert Model → Entity                                      │
+│    → Return Right(List<BookEntity>)                             │
+└────────────────────────┬─────────────────────────────────────────┘
+                         ↓
+┌────────────────────────▼─────────────────────────────────────────┐
+│ 7. DOMAIN LAYER (Use Case - Return)                             │
+│    GetBooksUseCase returns Either<Failure, List<BookEntity>>    │
+│    → Pass to BLoC                                                │
+└────────────────────────┬─────────────────────────────────────────┘
+                         ↓
+┌────────────────────────▼─────────────────────────────────────────┐
+│ 8. PRESENTATION LAYER (BLoC - Return)                           │
+│    BookBloc receives result                                      │
+│    → result.fold(...)                                            │
+│    → emit(BookState.loaded(books))                              │
+└────────────────────────┬─────────────────────────────────────────┘
+                         ↓
+┌────────────────────────▼─────────────────────────────────────────┐
+│ 9. UI UPDATE                                                     │
+│    BlocBuilder rebuilds                                          │
+│    → Display list of books                                       │
+└──────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Best Practices - Quy tắc Vàng
+
+### 1. Dependency Injection
+
+**Sử dụng:** GetIt + Injectable
+
+**Scope:**
+- `@singleton`: API Client, Storage (tồn tại suốt đời app, khởi tạo ngay)
+- `@lazySingleton`: Repositories, UseCases (khởi tạo khi cần, tồn tại suốt đời)
+- `@injectable/@factory`: BLoC (tạo mới mỗi lần inject, hủy khi Widget dispose)
+
+**Ví dụ:**
 ```dart
-// Event
-abstract class BooksEvent extends Equatable {
-  @override
-  List<Object> get props => [];
+@module
+abstract class RegisterModule {
+  @singleton
+  ApiClient get apiClient => ApiClient();
 }
 
-class LoadBooksEvent extends BooksEvent {}
-
-// State
-abstract class BooksState extends Equatable {
-  @override
-  List<Object> get props => [];
+@lazySingleton
+class BookRepositoryImpl implements IBookRepository {
+  final BookRemoteDataSource remoteDataSource;
+  // ...
 }
 
-class BooksInitial extends BooksState {}
-class BooksLoading extends BooksState {}
-class BooksLoaded extends BooksState {
-  final List<BookModel> books;
-  BooksLoaded(this.books);
-
-  @override
-  List<Object> get props => [books];
+@injectable
+class BookBloc extends Bloc<BookEvent, BookState> {
+  // ...
 }
-class BooksError extends BooksState {
-  final String message;
-  BooksError(this.message);
+```
 
-  @override
-  List<Object> get props => [message];
-}
+### 2. State Immutability (Tính Bất biến)
 
-// BLoC
-class BooksBloc extends Bloc<BooksEvent, BooksState> {
-  final BooksRepository repository;
+**Quy tắc:**
+- State phải luôn là Immutable
+- **KHÔNG** thay đổi trực tiếp thuộc tính: `state.count++` ❌
+- **PHẢI** tạo bản sao mới: `state.copyWith(count: state.count + 1)` ✅
 
-  BooksBloc({required this.repository}) : super(BooksInitial()) {
-    on<LoadBooksEvent>(_onLoadBooks);
-  }
+**Công cụ:** Sử dụng `freezed` để tự động sinh `copyWith`, `==`, `toString`
 
-  Future<void> _onLoadBooks(
-    LoadBooksEvent event,
-    Emitter<BooksState> emit,
-  ) async {
-    emit(BooksLoading());
-    final result = await repository.getAllBooks();
-    result.fold(
-      (failure) => emit(BooksError(failure.message)),
-      (books) => emit(BooksLoaded(books)),
+### 3. Error Handling (Xử lý Lỗi)
+
+**Functional Error Handling:**
+- Sử dụng `Either<Failure, Success>` thay vì try-catch
+- Buộc xử lý cả hai trường hợp
+- Lỗi là giá trị, không phải Exception
+
+**Ví dụ:**
+```dart
+final result = await useCase(params);
+result.fold(
+  (failure) => emit(State.error(failure.message)), // Handle error
+  (data) => emit(State.success(data)),             // Handle success
+);
+```
+
+### 4. Side Effects (Navigation, Dialogs)
+
+**Vấn đề:** BLoC không nên chứa UI code (BuildContext, Navigator).
+
+**Giải pháp:** Sử dụng `BlocListener` cho one-time events.
+
+**Ví dụ:**
+```dart
+BlocListener<AuthBloc, AuthState>(
+  listener: (context, state) {
+    state.whenOrNull(
+      success: (_) => Navigator.pushReplacementNamed(context, '/home'),
+      error: (msg) => ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(msg)),
+      ),
     );
-  }
-}
+  },
+  child: YourWidget(),
+)
 ```
 
----
+### 5. BLoC-to-BLoC Communication
 
-## Testing Strategy
+**Vấn đề:** BLoC A cần dữ liệu từ BLoC B.
 
-### Unit Tests
+**Giải pháp SAI:** ❌ Truyền BLoC A vào constructor của BLoC B (tạo coupling)
 
-**Test Hierarchy:**
+**Giải pháp ĐÚNG:** ✅ Reactive Repository Pattern
+- Repository expose `Stream<Data>`
+- Cả hai BLoC đều lắng nghe Stream từ Repository
+- Khi một BLoC cập nhật, Repository emit event → BLoC kia tự động nhận
+
+### 6. Multi-BLoC trên một Screen
+
+**Vấn đề:** Màn hình phức tạp cần nhiều nguồn dữ liệu.
+
+**Giải pháp:** Sử dụng `MultiBlocProvider`
+
+**Ví dụ:**
+```dart
+MultiBlocProvider(
+  providers: [
+    BlocProvider(create: (_) => getIt<CartBloc>()),
+    BlocProvider(create: (_) => getIt<AddressBloc>()),
+    BlocProvider(create: (_) => getIt<PaymentBloc>()),
+  ],
+  child: CheckoutView(),
+)
 ```
-test/
-├── data/
-│   ├── datasources/
-│   ├── models/
-│   └── repositories/
-└── presentation/
-    └── bloc/
+
+### 7. Testing Strategy
+
+**Unit Test:**
+- Test UseCases với mock Repository
+- Test BLoC với mock UseCase (sử dụng `bloc_test`)
+- Test Entities logic
+
+**Widget Test:**
+- Test Widget với mock BLoC
+- Verify UI renders correctly for each State
+
+**Integration Test:**
+- Test toàn bộ flow từ UI → Data Layer
+
+---
+
+## Anti-Patterns - Những điều KHÔNG nên làm
+
+| ❌ Anti-Pattern | ✅ Cách đúng |
+|----------------|-------------|
+| Parse JSON trong Entity | Parse JSON trong Model (Data Layer) |
+| BLoC gọi API trực tiếp | BLoC → UseCase → Repository → DataSource → API |
+| Widget gọi Repository | Widget → BLoC → UseCase → Repository |
+| State có thuộc tính mutable | State hoàn toàn immutable (final fields) |
+| BLoC chứa BuildContext | BLoC emit State, UI dùng BlocListener để navigate |
+| Một BLoC xử lý nhiều features | Mỗi feature có BLoC riêng |
+| Lồng nhiều BlocProvider | Dùng MultiBlocProvider |
+| Ném Exception từ Repository | Trả về `Either<Failure, Data>` |
+
+---
+
+## Tổng kết
+
+Cấu trúc này đảm bảo:
+
+1. **Separation of Concerns**: Mỗi layer có trách nhiệm rõ ràng
+2. **Testability**: Mọi component có thể test độc lập
+3. **Scalability**: Dễ dàng mở rộng team và features
+4. **Maintainability**: Dễ đọc, dễ sửa, dễ refactor
+5. **Independence**: Domain Layer hoàn toàn độc lập với Framework
+
+**Dependency Rule:**
+```
+Presentation → Domain ← Data
+(Only inward dependencies)
 ```
 
-**What to Test:**
-- ✅ BLoC logic (events → states)
-- ✅ Repository logic (data fetching, error handling)
-- ✅ Model parsing (JSON → Model)
-- ✅ DataSource calls (API integration)
-
-### Widget Tests
-
-**What to Test:**
-- ✅ UI rendering với different states
-- ✅ User interactions (tap, scroll, input)
-- ✅ State changes trigger UI updates
-
-### Integration Tests
-
-**What to Test:**
-- ✅ Complete user flows
-- ✅ Multiple features working together
-- ✅ Navigation between screens
+Khi cần thêm feature mới:
+1. Tạo folder trong `features/`
+2. Tạo 3 layers: `domain/`, `data/`, `presentation/`
+3. Implement từ trong ra ngoài: Domain → Data → Presentation
+4. Đăng ký dependencies trong `service_locator.dart`
 
 ---
 
-## References
-
-### Documentation
-- **Flutter Architecture Guide**: https://docs.flutter.dev/app-architecture/guide
-- **BLoC Pattern**: https://bloclibrary.dev/
-- **MVVM Pattern**: https://en.wikipedia.org/wiki/Model%E2%80%93view%E2%80%93viewmodel
-- **Repository Pattern**: https://docs.flutter.dev/app-architecture/design-patterns/repository
-
-### Packages
-- **flutter_bloc**: https://pub.dev/packages/flutter_bloc
-- **get_it**: https://pub.dev/packages/get_it
-- **dartz**: https://pub.dev/packages/dartz
-- **equatable**: https://pub.dev/packages/equatable
-
----
-
-## Project Statistics
-
-| Metric | Count |
-|--------|-------|
-| **Total Features** | 1 (Books) |
-| **Total Screens** | 3 (2 Composite + 1 Simple) |
-| **Total BLoCs** | 3 (Books, Search, Stats) |
-| **Total Connected Components** | 1 (SearchBar) |
-| **Total Presentational Components** | 7 |
-| **Architecture Layers** | 2 (Data + Presentation) |
-
----
-
-**Last Updated:** 2026-02-02
-**Maintained By:** Development Team
+**References:**
+- Clean Architecture - Robert C. Martin
+- BLoC Pattern Documentation
+- Flutter Official Architecture Guide
+- Báo cáo Kiến trúc Kỹ thuật: Thiết kế Hệ thống Flutter Quy mô Lớn với MVVM, BLoC và Clean Architecture

@@ -1,19 +1,20 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../data/repositories/books_repository.dart';
+import '../../../../core/usecases/usecase.dart';
+import '../../domain/usecases/get_books_usecase.dart';
 import 'books_event.dart';
 import 'books_state.dart';
 
-/// Books Feature BLoC - MVVM + BLoC Pattern
+/// Books Feature BLoC - Clean Architecture
 ///
-/// Handles loading and displaying books.
-/// In MVVM + BLoC, BLoC calls Repository directly (no use cases).
+/// Xử lý loading và displaying books.
+/// BLoC gọi Use Cases thay vì Repository trực tiếp.
 ///
 /// Location: features/books/presentation/bloc/
 class BooksBloc extends Bloc<BooksEvent, BooksState> {
-  final BooksRepository repository;
+  final GetBooksUseCase getBooksUseCase;
 
   BooksBloc({
-    required this.repository,
+    required this.getBooksUseCase,
   }) : super(const BooksInitial()) {
     on<LoadBooksEvent>(_onLoadBooks);
     on<RefreshBooksEvent>(_onRefreshBooks);
@@ -25,7 +26,7 @@ class BooksBloc extends Bloc<BooksEvent, BooksState> {
   ) async {
     emit(const BooksLoading());
 
-    final result = await repository.getAllBooks();
+    final result = await getBooksUseCase(const NoParams());
 
     result.fold(
       (failure) => emit(BooksError(failure.message)),
@@ -37,7 +38,7 @@ class BooksBloc extends Bloc<BooksEvent, BooksState> {
     RefreshBooksEvent event,
     Emitter<BooksState> emit,
   ) async {
-    final result = await repository.getAllBooks();
+    final result = await getBooksUseCase(const NoParams());
 
     result.fold(
       (failure) => emit(BooksError(failure.message)),

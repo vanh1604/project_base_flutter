@@ -1,38 +1,23 @@
 import 'package:flutter/material.dart';
-import 'core/di/injection_container.dart';
-import 'screens/composite/dashboard/dashboard_screen.dart';
-import 'screens/composite/book_list/book_list_screen.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'app/app.dart';
+import 'app/app_bloc_observer.dart';
+import 'core/injections/service_locator.dart';
+import 'features/books/presentation/pages/dashboard_screen.dart';
+import 'features/books/presentation/pages/book_list_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Setup BLoC Observer cho logging
+  Bloc.observer = AppBlocObserver();
+
+  // Initialize Dependency Injection
   await initializeDependencies();
-  runApp(const MyApp());
-}
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Stephen King Books',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: Colors.deepPurple,
-          brightness: Brightness.light,
-        ),
-        useMaterial3: true,
-        cardTheme: CardThemeData(
-          elevation: 2,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-        ),
-      ),
-      home: const MainNavigationScreen(),
-    );
-  }
+  runApp(const App(
+    home: MainNavigationScreen(),
+  ));
 }
 
 class MainNavigationScreen extends StatefulWidget {

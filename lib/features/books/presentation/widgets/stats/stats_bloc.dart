@@ -1,19 +1,20 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
-import '../../../data/repositories/books_repository.dart';
+import '../../../../../core/usecases/usecase.dart';
+import '../../../domain/usecases/get_books_usecase.dart';
 import 'stats_event.dart';
 import 'stats_state.dart';
 
-/// Stats Widget BLoC (Part of Books Feature)
+/// Stats Widget BLoC (Part of Books Feature) - Clean Architecture
 ///
-/// Calculates statistics from Books data.
-/// This is NOT a separate feature - it's a widget component of Books feature
-/// because it has no business domain, only aggregates Books data.
+/// Tính toán statistics từ Books data sử dụng GetBooksUseCase.
+/// Đây KHÔNG phải là separate feature - đây là widget component của Books feature
+/// vì nó không có business domain, chỉ aggregate Books data.
 ///
 /// Location: features/books/presentation/widgets/stats/
 class StatsBloc extends Bloc<StatsEvent, StatsState> {
-  final BooksRepository repository;
+  final GetBooksUseCase getBooksUseCase;
 
-  StatsBloc({required this.repository}) : super(const StatsInitial()) {
+  StatsBloc({required this.getBooksUseCase}) : super(const StatsInitial()) {
     on<LoadStatsEvent>(_onLoadStats);
   }
 
@@ -23,7 +24,7 @@ class StatsBloc extends Bloc<StatsEvent, StatsState> {
   ) async {
     emit(const StatsLoading());
 
-    final result = await repository.getAllBooks();
+    final result = await getBooksUseCase(const NoParams());
 
     result.fold(
       (failure) => emit(StatsError(failure.message)),

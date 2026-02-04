@@ -1,31 +1,23 @@
-import 'package:equatable/equatable.dart';
+import '../../domain/entities/book_entity.dart';
 
-/// Book Model - MVVM + BLoC Pattern
+/// Book Model - Data Layer (Clean Architecture)
 ///
-/// In MVVM + BLoC, we don't separate Entity and Model.
-/// This class serves as both business object AND data model.
+/// Mở rộng BookEntity với logic JSON serialization.
+/// Model chịu trách nhiệm chuyển đổi giữa JSON và Entity.
 ///
 /// Location: features/books/data/models/
-class BookModel extends Equatable {
-  final int id;
-  final String title;
-  final int year;
-  final String handle;
-  final String publisher;
-  final String isbn;
-  final int pages;
-
+class BookModel extends BookEntity {
   const BookModel({
-    required this.id,
-    required this.title,
-    required this.year,
-    required this.handle,
-    required this.publisher,
-    required this.isbn,
-    required this.pages,
+    required super.id,
+    required super.title,
+    required super.year,
+    required super.handle,
+    required super.publisher,
+    required super.isbn,
+    required super.pages,
   });
 
-  // JSON serialization for API/Database
+  /// Convert từ JSON sang Model
   factory BookModel.fromJson(Map<String, dynamic> json) {
     return BookModel(
       id: json['id'] as int,
@@ -38,6 +30,7 @@ class BookModel extends Equatable {
     );
   }
 
+  /// Convert từ Model sang JSON
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -50,7 +43,16 @@ class BookModel extends Equatable {
     };
   }
 
-  // Equatable for value comparison
-  @override
-  List<Object?> get props => [id, title, year, handle, publisher, isbn, pages];
+  /// Convert từ Entity sang Model
+  factory BookModel.fromEntity(BookEntity entity) {
+    return BookModel(
+      id: entity.id,
+      title: entity.title,
+      year: entity.year,
+      handle: entity.handle,
+      publisher: entity.publisher,
+      isbn: entity.isbn,
+      pages: entity.pages,
+    );
+  }
 }

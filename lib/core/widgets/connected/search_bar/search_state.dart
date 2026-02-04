@@ -1,5 +1,5 @@
 import 'package:equatable/equatable.dart';
-import '../../../../features/books/data/models/book_model.dart';
+import '../../../../features/books/domain/entities/book_entity.dart';
 
 abstract class SearchState extends Equatable {
   const SearchState();
@@ -17,7 +17,7 @@ class SearchLoading extends SearchState {
 }
 
 class SearchLoaded extends SearchState {
-  final List<BookModel> books;
+  final List<BookEntity> books;
   final String query;
 
   const SearchLoaded({

@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../../../core/constants/api_constants.dart';
-import '../../../../core/errors/exceptions.dart';
+import '../../../../core/error/exceptions.dart';
 import '../models/book_model.dart';
 
 abstract class BooksRemoteDataSource {

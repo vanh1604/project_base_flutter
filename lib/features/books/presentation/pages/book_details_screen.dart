@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/models/book_model.dart';
+import '../../domain/entities/book_entity.dart';
 
 /// Simple Screen: Uses 1 feature (Books only)
 ///
@@ -7,7 +7,7 @@ import '../../data/models/book_model.dart';
 ///
 /// Location: features/books/presentation/pages/ (Simple screen - 1 feature)
 class BookDetailsScreen extends StatelessWidget {
-  final BookModel book;
+  final BookEntity book;
 
   const BookDetailsScreen({
     super.key,
