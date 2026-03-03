@@ -94,16 +94,7 @@ Bạn cần biết trước:
 
 ### Project Base là Gì?
 
-Project base là **bộ khung khởi động** (scaffold) giải quyết sẵn 6 bài toán cơ sở mà mọi Flutter app đều cần:
-
-1. **Authentication** — Login, logout, token refresh tự động
-2. **Networking** — HTTP client với Bearer token, retry 401
-3. **Navigation** — Bottom tab + nested stack + auth guard
-4. **State Management** — Reactive UI cập nhật khi state thay đổi
-5. **Secure Storage** — Token lưu trong hardware-backed storage
-6. **Error Handling** — Typed exceptions từ network tới UI
-
-Team dùng project base này làm điểm khởi đầu, rồi thêm business logic cụ thể của từng sản phẩm.
+Project base là **bộ khung khởi động** (scaffold) giải quyết sẵn các bài toán cơ sở mà mọi Flutter app đều cần — authentication, networking, navigation, state management, secure storage, error handling. Team clone repo này làm điểm khởi đầu, rồi thêm business logic cụ thể của từng sản phẩm. Chi tiết phạm vi xem **A1**.
 
 ---
 
@@ -115,7 +106,7 @@ Team dùng project base này làm điểm khởi đầu, rồi thêm business lo
 | Tầng kiến trúc          | 4 (Domain → Data → Application → Presentation)             |
 | Providers trong DI tree | 9 (5 keepAlive + 4 auto-dispose)                           |
 | Interceptors trong Dio  | 2 (AppLogInterceptor + AuthInterceptor)                    |
-| Diagrams trong tài liệu | 22 (ký hiệu Section.Number — A.1, B.1…D.5…H.3…L.1)         |
+| Diagrams trong tài liệu | 23 (ký hiệu Section.Number — A.1, B.1…D.5…H.3…L.1)         |
 | Files source code chính | ~40                                                        |
 
 ---
