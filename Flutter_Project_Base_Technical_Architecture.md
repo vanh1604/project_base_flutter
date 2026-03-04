@@ -578,6 +578,94 @@ Nếu không có Application layer, analytics sẽ nằm trong Controller (Prese
 
 ### C1. Tại sao Riverpod?
 
+**Bước 1 — Ba vấn đề cần giải quyết**
+
+Trước khi xem bảng so sánh, hãy hiểu rõ ba vấn đề thực tế mà dự án này phải đối mặt. Nếu không có vấn đề, không cần giải pháp.
+
+---
+
+*Vấn đề 1 — AuthInterceptor không có BuildContext*
+
+`AuthInterceptor` là một class Dart thuần — không phải Widget, không có `BuildContext`. Nhưng nó cần đọc `TokenStorage` để đính kèm access token vào mỗi request, và cần gọi `logout()` khi token hết hạn.
+
+```
+HTTP Request
+    │
+    ▼
+AuthInterceptor (class Dart thuần)
+    │
+    ├── Cần: TokenStorage để đọc access_token
+    └── Cần: LoginController để gọi logout()
+
+Nhưng AuthInterceptor không phải Widget
+→ Không có BuildContext
+→ Provider.of<TokenStorage>(context)  ← KHÔNG THỂ DÙNG
+→ GetIt.instance<TokenStorage>()      ← Được, nhưng xem vấn đề 3
+```
+
+Khi access token hết hạn và cần logout, `AuthInterceptor` phải thông báo cho app biết. Chuỗi thông báo đi qua 4 component, không có component nào là Widget:
+
+```
+AuthInterceptor
+    │ logout()
+    ▼
+LoginController  (state: AsyncData(null))
+    │ notifyListeners()
+    ▼
+RouterNotifier   (ChangeNotifier)
+    │ redirect
+    ▼
+GoRouter         → navigate to /login
+```
+
+`setState()` chỉ hoạt động bên trong một Widget. Cả 4 component trên đều là class Dart thuần — `setState()` không đủ để truyền tín hiệu xuyên suốt chuỗi này.
+
+---
+
+*Vấn đề 2 — State thay đổi cần lan ra nhiều Widget cùng lúc*
+
+Khi user đăng nhập thành công, nhiều Widget trên màn hình cần cập nhật đồng thời: AppBar hiển thị tên user, ProfileScreen hiển thị ảnh avatar, BottomNavBar unlock các tab bị ẩn.
+
+```
+loginController.state = AsyncData(user)
+      │
+      ├── AppBar          ← cần rebuild
+      ├── ProfileScreen   ← cần rebuild
+      └── BottomNavBar    ← cần rebuild
+```
+
+`setState()` chỉ rebuild Widget gọi nó và con cháu của nó. Nếu AppBar, ProfileScreen, BottomNavBar không cùng một Widget subtree, `setState()` không thể notify tất cả cùng lúc. Phải có cơ chế observable tách biệt khỏi widget tree.
+
+---
+
+*Vấn đề 3 — Test khó vì dependency bị hardcode*
+
+Khi viết unit test cho `LoginController`, bạn không muốn gọi API thật. Bạn muốn swap `AuthRepository` bằng một `FakeAuthRepository` trả về data giả.
+
+```
+Unit test thực tế:
+   LoginController.login('email', 'pass')
+       │
+       └── gọi AuthRepository.login()  ← muốn dùng FakeAuthRepository ở đây
+
+Với GetIt (service locator):
+   GetIt.instance.registerSingleton<AuthRepository>(FakeAuthRepository())
+   // Phải unregister sau test, nhớ reset, dễ ảnh hưởng test khác
+
+Với Riverpod:
+   ProviderScope(
+     overrides: [authRepositoryProvider.overrideWith(() => FakeAuthRepository())],
+     child: ...
+   )
+   // Scope riêng biệt, test này không ảnh hưởng test khác
+```
+
+Riverpod dùng `ProviderContainer` — một container độc lập với widget tree. Mỗi test có thể tạo container riêng với override riêng, không bao giờ xung đột.
+
+---
+
+**Bước 2 — So sánh các lựa chọn**
+
 | Tiêu chí            | GetIt (service locator) | Provider    | Riverpod (code gen)      |
 | ------------------- | ----------------------- | ----------- | ------------------------ |
 | Compile-time safety | Không (runtime crash)   | Partial     | Có — type-safe hoàn toàn |
@@ -587,7 +675,25 @@ Nếu không có Application layer, analytics sẽ nằm trong Controller (Prese
 | Code boilerplate    | Thấp                    | Trung bình  | Thấp (code gen)          |
 | Watch reactive      | Không                   | Có          | Có + select()            |
 
-**Lý do chọn Riverpod:** App Flutter cần DI không phụ thuộc widget tree (interceptor cần TokenStorage nhưng không có context), cần reactive (UI tự rebuild khi state đổi), và cần mockable để test từng tầng độc lập. Riverpod đáp ứng cả ba.
+---
+
+**Bước 3 — Riverpod giải quyết cả ba như thế nào**
+
+*Vấn đề 1 (không có context):* Riverpod dùng `ProviderContainer` — một object Dart thuần, không phụ thuộc widget tree. `AuthInterceptor` nhận `Ref` (tham chiếu đến container) qua constructor. Từ `Ref`, nó gọi `ref.read(tokenStorageProvider)` và `ref.read(loginControllerProvider.notifier)` — không cần một `BuildContext` nào cả.
+
+```
+ProviderContainer (Dart object, không phải Widget)
+    │
+    ├── tokenStorageProvider  → TokenStorage instance
+    ├── loginControllerProvider → LoginController instance
+    └── dioProvider → Dio instance (có AuthInterceptor bên trong)
+
+AuthInterceptor nhận Ref → đọc provider → không cần context
+```
+
+*Vấn đề 2 (state lan ra nhiều Widget):* Mọi Widget gọi `ref.watch(loginControllerProvider)` đều tự động subscribe vào provider đó. Khi `loginController.state` thay đổi, Riverpod notify tất cả subscriber — dù chúng ở bất kỳ đâu trong widget tree.
+
+*Vấn đề 3 (test):* `ProviderScope(overrides: [...])` tạo container mới với dependency được swap. Swap 1 dòng, test toàn bộ `LoginController` mà không gọi API thật, không ảnh hưởng test khác.
 
 ---
 
@@ -614,11 +720,75 @@ Mỗi package sinh code (`freezed`, `json_serializable`, `riverpod_generator`) �
 
 #### C2.1 Vấn đề mà Code Gen giải quyết
 
-Khi viết một Riverpod provider "thủ công" (không dùng code gen), developer phải tự khai báo: loại provider (`Provider`, `AsyncNotifierProvider`, `FutureProvider`...), kiểu generic (`Provider<TokenStorage>`), `autoDispose` hay không, tên string để debug, logic `create()`. Đây là boilerplate dễ sai và không được compiler kiểm tra.
+**Bước 1 — Vấn đề khi viết provider thủ công**
 
-`riverpod_generator` cho phép developer chỉ viết **logic thực sự** (hàm hoặc class), đặt annotation, rồi để tool tạo toàn bộ boilerplate — đúng, type-safe, nhất quán.
+Riverpod có nhiều loại provider: `Provider`, `FutureProvider`, `StreamProvider`, `NotifierProvider`, `AsyncNotifierProvider`... Khi không dùng code gen, developer phải tự quyết định đúng loại, tự điền đúng generic, và mọi sai sót chỉ bị phát hiện lúc app chạy — không phải lúc compile.
 
-Tương tự, `json_serializable` giải quyết boilerplate của JSON parsing (viết tay `fromJson` dễ quên field, sai kiểu), và `freezed` giải quyết boilerplate của immutable class (`==`, `hashCode`, `copyWith` viết tay rất dài và dễ lỗi).
+*Kịch bản thực tế:* Bạn cần khai báo `tokenStorageProvider` và `loginControllerProvider` thủ công:
+
+```
+Không có code gen — viết tay:
+
+final tokenStorageProvider = Provider<TokenStorage>(         ← phải tự chọn đúng loại
+  (ref) => TokenStorage(ref.read(secureStorageProvider)),
+);
+
+final loginControllerProvider =
+  AsyncNotifierProvider<LoginController, User?>(             ← sai 1 generic → crash lúc runtime
+    () => LoginController(),
+  );
+```
+
+Vấn đề với cách viết tay:
+
+```
+Lỗi 1 — Chọn sai loại provider:
+  Dùng Provider thay vì AsyncNotifierProvider cho LoginController
+  → App compile được → crash lúc chạy: "type mismatch"
+  → Không có lỗi ở bước compile
+
+Lỗi 2 — Sai generic:
+  AsyncNotifierProvider<LoginController, User>  ← thiếu dấu ?
+  → LoginController trả về null khi chưa login
+  → Runtime null check exception
+
+Lỗi 3 — Quên autoDispose:
+  Provider không có .autoDispose → TokenStorage tồn tại mãi
+  → Memory leak nếu dùng trong feature tạm thời
+  → Không có cảnh báo nào từ compiler
+```
+
+*Cùng kết quả với code gen:*
+
+```
+Có code gen — chỉ viết logic:
+
+@Riverpod(keepAlive: true)
+TokenStorage tokenStorage(Ref ref) =>       ← tool tự chọn loại Provider
+  TokenStorage(ref.read(secureStorageProvider));
+
+@riverpod
+class LoginController extends _$LoginController {  ← tool tự tạo AsyncNotifierProvider<LoginController, User?>
+  @override
+  Future<User?> build() async { ... }
+}
+```
+
+Tool đọc annotation, đọc kiểu trả về, tự quyết định loại provider đúng và sinh boilerplate. Sai annotation → lỗi compile ngay, không chờ đến lúc chạy.
+
+---
+
+**Bước 2 — Ba vấn đề thủ công và tool giải quyết**
+
+Ba loại boilerplate trong dự án này đều có nguy cơ gây lỗi âm thầm — nghĩa là code compile được nhưng hành vi sai lúc runtime:
+
+| Vấn đề khi viết thủ công | Hậu quả | Tool giải quyết |
+| ------------------------- | ------- | --------------- |
+| Khai báo provider sai loại hoặc sai generic | Runtime crash, type mismatch | `riverpod_generator` |
+| `fromJson` viết tay quên field hoặc sai kiểu | Field null lúc runtime, app crash khi parse API response | `json_serializable` |
+| `copyWith` / `==` / `hashCode` viết tay, quên update khi thêm field | Widget không rebuild khi state đổi, bug khó tìm | `freezed` |
+
+Cả ba tool đều hoạt động theo cùng một nguyên tắc: developer chỉ viết phần quan trọng (logic, schema, field), tool sinh ra phần dễ sai (boilerplate, type wiring). Lỗi được bắt ở bước `dart pub run build_runner build`, không phải lúc user dùng app.
 
 ---
 
@@ -641,38 +811,257 @@ Dart coi hai file này là **một library duy nhất**. Nghĩa là:
 
 #### C2.3 riverpod_generator tạo ra gì trong `.g.dart`
 
+**Bước 1 — Vấn đề nếu không có riverpod_generator**
+
+Riverpod có nhiều loại provider khác nhau: `Provider`, `FutureProvider`, `AsyncNotifierProvider`, `NotifierProvider`... Mỗi loại dành cho một use-case khác nhau. Nếu viết tay, bạn phải chọn đúng loại — và Dart **không bắt lỗi ở compile time** nếu bạn chọn sai:
+
+```
+// Viết tay — sai loại provider → runtime crash, không phải compile error
+final loginControllerProvider = Provider<LoginController>(  // SAI
+  (ref) => LoginController(),
+);
+
+// Đúng phải là:
+final loginControllerProvider = AsyncNotifierProvider<LoginController, User?>(
+  () => LoginController(),
+);
+// Nếu quên generic User? → sai kiểu → crash khi widget dùng ref.watch()
+```
+
+Với riverpod_generator, bạn chỉ viết `@riverpod` lên đúng class hoặc hàm — generator **đọc kiểu trả về** và tự chọn loại provider phù hợp. Không thể sai loại vì generator làm thay.
+
+---
+
+**Bước 2 — riverpod_generator đọc annotation và sinh ra 3 thứ**
+
 `build_runner` đọc annotation `@riverpod` / `@Riverpod(keepAlive:)` và sinh ra **3 thứ** cho mỗi provider:
 
 **Thứ 1: Một class Provider** — Ví dụ annotation trên hàm `tokenStorage(Ref ref)` sinh ra class `TokenStorageProvider`. Class này extend `$FunctionalProvider<TokenStorage, ...>`, có method `create(Ref ref)` gọi lại hàm gốc, và embed `isAutoDispose: false` (vì `keepAlive: true`). Class này là thứ mà Riverpod runtime dùng để quản lý lifecycle.
 
-**Thứ 2: Một constant instance** — `const tokenStorageProvider = TokenStorageProvider._()`. Đây là object bất biến, được dùng khi gọi `ref.watch(tokenStorageProvider)`. Vì là `const`, không tốn bộ nhớ phụ khi reference nhiều lần.
+**Thứ 2: Một constant instance** — `const tokenStorageProvider = TokenStorageProvider._()`. Đây là object bất biến, được dùng khi gọi `ref.watch(tokenStorageProvider)`. Vì là `const`, cùng một "nhãn tên" được dùng khắp nơi trong app mà không tốn thêm bộ nhớ — giống như một singleton label: dù bạn viết `tokenStorageProvider` ở 50 nơi, chúng đều trỏ về cùng một ô nhớ duy nhất được tạo lúc compile.
 
-**Thứ 3: Một hash string** — Ví dụ `String _$tokenStorageHash() => r'09e5f41421...'`. Hash này là SHA1 của nội dung hàm nguồn. Riverpod dùng nó để phát hiện khi provider bị sửa giữa hai lần hot reload — nếu hash thay đổi, provider được invalidate và recreate.
+**Thứ 3: Một hash string** — Ví dụ `String _$tokenStorageHash() => r'09e5f41421...'`. Hash này là "dấu vân tay" của hàm nguồn — sinh ra từ nội dung code, không phải tên hàm. Khi bạn hot reload sau khi sửa logic bên trong `tokenStorage(...)`, hash thay đổi → Riverpod phát hiện provider đã bị sửa → tự động invalidate và recreate provider đó. Nếu không có hash, Riverpod không biết provider nào cần reset sau hot reload.
 
-**Trường hợp đặc biệt cho AsyncNotifier:** Annotation trên class `LoginController extends _$LoginController` sinh ra thêm **abstract class `_$LoginController`** trong `.g.dart`. Class này định nghĩa method `runBuild()` — là glue code kết nối `build()` method của developer với Riverpod's internal scheduling. Developer chỉ viết logic trong `build()`, còn việc gọi đúng lúc do `runBuild()` xử lý.
+---
+
+**Bước 3 — Trường hợp đặc biệt: AsyncNotifier**
+
+Annotation trên class `LoginController extends _$LoginController` sinh ra thêm **abstract class `_$LoginController`** trong `.g.dart`. Đây là lớp "ống nước" (plumbing) mà Riverpod cần để vận hành `LoginController`:
+
+```
+File .g.dart sinh ra:
+    abstract class _$LoginController extends AsyncNotifier<User?> {
+        // Định nghĩa runBuild() — Riverpod gọi cái này để khởi động
+        // Xử lý async loading state (AsyncLoading → AsyncData/AsyncError)
+        // Kết nối build() của developer vào scheduler nội bộ của Riverpod
+    }
+
+File nguồn của bạn:
+    class LoginController extends _$LoginController {
+        @override
+        Future<User?> build() async {
+            // Bạn chỉ viết logic ở đây
+            // Còn "gọi khi nào", "xử lý lỗi thế nào" do _$LoginController lo
+        }
+    }
+```
+
+Tại sao cần lớp trung gian này? Vì Riverpod cần biết khi nào gọi `build()`, cần wrap kết quả vào `AsyncLoading` / `AsyncData` / `AsyncError`, và cần expose `ref` cho developer dùng — tất cả những "việc nhà" đó được đặt trong `_$LoginController`. Developer chỉ viết logic nghiệp vụ trong `build()`, generator lo phần tích hợp với hệ thống nội bộ của Riverpod.
 
 ---
 
 #### C2.4 json_serializable tạo ra gì trong `.g.dart`
 
-Annotation `@freezed` kết hợp với `json_serializable` trên `UserModel` sinh ra hai hàm trong `user_model.g.dart`:
+**Bước 1 — Vấn đề khi viết fromJson tay**
 
-- `_$UserModelFromJson(Map<String, dynamic> json)` — đọc từng key trong JSON map và gán vào constructor. Đây là hàm được gọi khi viết `UserModel.fromJson(response.data)`.
-- `_$UserModelToJson(_UserModel instance)` — ngược lại, chuyển object thành Map. Dùng khi serialize để gửi lên server.
+Backend API trả về JSON với snake_case field names. Dart convention dùng camelCase. Nếu viết tay, bạn phải tự ánh xạ và nhớ đúng key name cho từng field:
 
-**Vai trò của `@JsonKey(name: 'access_token')`:** Khi generator gặp annotation này trên field `accessToken`, nó sinh code đọc key `'access_token'` (snake_case) từ JSON thay vì `'accessToken'` (camelCase mặc định). Không có annotation này, `fromJson` sẽ tìm key `'accessToken'` trong JSON — không tìm thấy → field null → crash hoặc sai data.
+```
+// JSON từ API:
+{ "access_token": "abc123", "refresh_token": "xyz789" }
+
+// Viết tay fromJson:
+factory LoginResponse.fromJson(Map<String, dynamic> json) {
+  return LoginResponse(
+    accessToken: json['access_token'],   // phải nhớ snake_case
+    refreshToken: json['refresh_token'], // nếu viết sai key → null
+  );
+}
+// Thêm field mới → phải sửa cả fromJson lẫn toJson → dễ quên
+```
+
+Mỗi lần backend thêm field mới, bạn phải sửa cả hai hàm `fromJson` và `toJson` — và nếu quên một chỗ, bug sẽ âm thầm tồn tại vì giá trị chỉ bị null, không phải compile error.
 
 ---
 
-#### C2.5 freezed tạo ra gì trong `.freezed.dart`
+**Bước 2 — json_serializable sinh ra 2 hàm**
 
-`freezed` đọc class có annotation `@freezed` và sinh ra file `.freezed.dart` chứa:
+Annotation `@freezed` kết hợp với `json_serializable` trên `UserModel` sinh ra hai hàm trong `user_model.g.dart`:
 
-- **Mixin `_$User`** — implement `==` (so sánh từng field thay vì reference), `hashCode` (`Object.hash(runtimeType, id, name, email)`), `toString()` (`'User(id: ..., name: ..., email: ...)'`), và property `copyWith`.
-- **`$UserCopyWith<$Res>`** — interface và implementation của `copyWith`. Cho phép viết `user.copyWith(name: 'Minh')` để tạo bản copy chỉ thay field `name`.
-- **Private implementation class `_User`** — class thực sự được tạo khi gọi `const User(...)`. Nó extend `User` và mix in `_$User` để có đủ các method trên.
+- `_$UserModelFromJson(Map<String, dynamic> json)` — đọc từng key trong JSON map và gán vào constructor. Đây là hàm được gọi khi viết `UserModel.fromJson(response.data)`. Generator tự xử lý snake_case khi có `@JsonKey` annotation trên field.
+- `_$UserModelToJson(_UserModel instance)` — chiều ngược lại, chuyển object thành Map để gửi lên server. Mỗi khi thêm field mới vào class, generator tự cập nhật cả hai hàm — bạn chỉ cần chạy lại `build_runner`.
 
-**Tại sao `const factory User(...)` thay vì constructor thường?** Factory constructor cho phép Dart trả về `_User` (private subclass) thay vì `User`. Đây là pattern Freezed dùng để kiểm soát hoàn toàn implementation — developer không thể tạo `User` theo cách khác.
+---
+
+**Bước 3 — @JsonKey giải quyết snake_case vs camelCase**
+
+Khi generator gặp `@JsonKey(name: 'access_token')` trên field `accessToken`, nó sinh code đọc key `'access_token'` (snake_case) từ JSON thay vì `'accessToken'` (camelCase mặc định):
+
+```
+Không có @JsonKey(name: 'access_token'):
+    fromJson tìm key 'accessToken' trong JSON  ← KHÔNG tồn tại trong API response
+    → accessToken = null
+    → App crash khi dùng token
+```
+
+Bảng ánh xạ trong thực tế của project:
+
+| API JSON key     | Dart field      | Annotation                          |
+|------------------|-----------------|-------------------------------------|
+| `access_token`   | `accessToken`   | `@JsonKey(name: 'access_token')`    |
+| `refresh_token`  | `refreshToken`  | `@JsonKey(name: 'refresh_token')`   |
+| `expires_in`     | `expiresIn`     | `@JsonKey(name: 'expires_in')`      |
+| `token_type`     | `tokenType`     | `@JsonKey(name: 'token_type')`      |
+
+Không có annotation, generator dùng tên field Dart làm key → sai với mọi API trả snake_case (đa số REST API đều vậy).
+
+---
+
+#### C2.5 Freezed Tạo Ra Gì trong `.freezed.dart`
+
+**Bước 1 — Hiểu vấn đề gốc rễ trước**
+
+Trong Dart, nếu không làm gì thêm, hai object có cùng giá trị vẫn bị coi là **khác nhau**:
+
+```
+final a = User(id: '1', name: 'Minh')   →  ô nhớ địa chỉ 0x001
+final b = User(id: '1', name: 'Minh')   →  ô nhớ địa chỉ 0x002
+
+a == b   →   FALSE
+```
+
+Dart không nhìn vào giá trị `id` hay `name` — nó chỉ so sánh **địa chỉ RAM** (`0x001` vs `0x002`). Đây là hành vi mặc định của mọi class Dart không có `==` override.
+
+---
+
+**Bước 2 — Tại sao điều đó là vấn đề?**
+
+Riverpod dùng `==` để quyết định có cần rebuild widget hay không. Mỗi lần set state mới, Riverpod chạy ngầm bước kiểm tra này:
+
+```
+loginController.state = AsyncData(newUser)
+                              │
+              Riverpod: oldUser == newUser ?
+              │
+              ├── TRUE  → data không đổi → bỏ qua, không rebuild  ✅
+              └── FALSE → data đổi → notify widget → rebuild       ✅
+
+Nếu KHÔNG có == override:
+              │
+              └── Luôn FALSE (vì luôn khác địa chỉ RAM)
+                  → luôn rebuild dù data không đổi                 ❌
+```
+
+Bạn không bao giờ tự tay viết `userA == userB` trong code — nhưng Riverpod làm điều đó **tự động ngầm** mỗi khi state thay đổi.
+
+---
+
+**Bước 3 — Kịch bản thực tế**
+
+*Kịch bản 1 — User bấm Save mà không sửa gì:*
+
+```
+User vào màn hình Profile → bấm Save (không đổi gì)
+App gọi API update → backend trả về User(id:'1', name:'Minh')
+loginController.state = AsyncData(newUser)
+
+Riverpod: oldUser == newUser?
+  Có == override  →  TRUE  →  không rebuild ProfileScreen  ✅
+  Không có ==     →  FALSE →  rebuild ProfileScreen thừa   ❌
+```
+
+*Kịch bản 2 — Token hết hạn, AuthInterceptor refresh:*
+
+```
+Access token hết hạn → AuthInterceptor gọi refresh API
+Backend trả về User mới (data giống y chang)
+loginController.state = AsyncData(newUser)
+
+Riverpod: oldUser == newUser?
+  Có == override  →  TRUE  →  màn hình không nhấp nháy    ✅
+  Không có ==     →  FALSE →  màn hình rebuild không lý do ❌
+```
+
+---
+
+**Bước 4 — Freezed sinh ra để giải quyết**
+
+`freezed` đọc class có annotation `@freezed` và sinh ra file `.freezed.dart` chứa 3 thứ:
+
+**① Mixin `_$User`** — thư viện các method dùng chung:
+- `==` : so sánh từng field (`id`, `name`, `email`) thay vì địa chỉ RAM
+- `hashCode` : `Object.hash(runtimeType, id, name, email)` — nhất quán với `==`
+- `toString()` : `'User(id: 1, name: Minh, email: ...)''` — dễ debug
+- `copyWith` : property trỏ tới `$UserCopyWith`
+
+**② `$UserCopyWith<$Res>`** — interface và implementation của `copyWith`:
+
+```
+user.copyWith(name: 'Minh mới')
+      │
+      └── Tạo User MỚI trong RAM với:
+            id    = user.id         (giữ nguyên)
+            name  = 'Minh mới'     (thay)
+            email = user.email      (giữ nguyên)
+```
+
+Không có Freezed, bạn phải viết tay: `User(id: user.id, name: 'Minh mới', email: user.email)` — dài dòng và dễ quên field khi class có nhiều field.
+
+**③ Private class `_User`** — class thực sự được tạo khi gọi `User(...)`:
+
+```
+Bạn gọi:    User(id: '1', name: 'Minh')
+Dart thực:  _User(id: '1', name: 'Minh')   ← private subclass
+```
+
+`_User` extend `User` và mixin `_$User` — có đủ `==`, `hashCode`, `copyWith`. Developer không thể tạo `User` theo cách nào khác → Freezed kiểm soát hoàn toàn implementation.
+
+---
+
+**Bước 5 — Tại sao `const factory` thay vì constructor thường?**
+
+`factory` và `const` là hai keyword độc lập, làm hai việc khác nhau:
+
+| Keyword | Ý nghĩa | Liên quan đến RAM? |
+|---|---|---|
+| `factory` | "Tôi kiểm soát object nào được trả về" — trả `_User` thay vì `User` | Không |
+| `const` | Compile-time constant — cùng giá trị → cùng ô nhớ | **Có**, nhưng chỉ khi giá trị giống nhau |
+
+`const` reuse RAM chỉ trong trường hợp:
+
+```
+final a = const User(id: '1', name: 'Minh');
+final b = const User(id: '1', name: 'Minh');
+identical(a, b)  →  TRUE   ← cùng ô nhớ
+
+final c = const User(id: '2', name: 'Nam');
+identical(a, c)  →  FALSE  ← giá trị khác, ô nhớ khác
+```
+
+Trong thực tế, User thường đến từ API (`UserModel.fromJson(json).toEntity()`) — **không phải `const`** → luôn tạo object mới. Đây là lý do `==` override quan trọng hơn `const`.
+
+---
+
+**Bước 6 — Tại sao không dùng thẳng object từ API?**
+
+```
+UserModel (Data Layer)       ← biết JSON, biết tên field API
+    │  .toEntity()
+    ▼
+User entity (Domain Layer)   ← chỉ biết business data
+```
+
+Nếu backend đổi tên field `user_name` → `username`, bạn chỉ sửa `UserModel.fromJson` — không đụng đến `User` entity và toàn bộ business logic bên trên. Đây là lý do tách hai class thay vì dùng thẳng `UserModel` khắp nơi trong app.
 
 ---
 
@@ -1301,14 +1690,51 @@ newAccessToken == null → _logout()
 
 ### E1. Tại sao Không dùng SharedPreferences?
 
-`SharedPreferences` lưu data dưới dạng plaintext vào file XML (Android) hoặc plist (iOS). Bất kỳ app nào có quyền root trên thiết bị, hoặc bất kỳ tool forensic nào, đều có thể đọc được token.
+**Bước 1 — SharedPreferences lưu token ở đâu?**
 
-`flutter_secure_storage` sử dụng:
+`SharedPreferences` ghi ra file text có thể đọc được bằng mắt thường:
 
-- **iOS:** Keychain với kSecAttrAccessibleWhenUnlocked — hardware-backed, token được mã hóa bởi Secure Enclave, không thể read nếu thiết bị bị lock
-- **Android:** Keystore System với AES encryption — private key được lưu trong hardware security module (TEE), không thể export ra
+```
+Android: /data/data/com.example.sleepbuddy/shared_prefs/
+         FlutterSharedPreferences.xml
 
-**Kết quả:** Ngay cả khi file storage bị sao chép ra ngoài, attacker không thể decrypt được token vì key chỉ tồn tại trong hardware của thiết bị cụ thể đó.
+Nội dung file:
+<map>
+  <string name="access_token">eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...</string>
+  <string name="refresh_token">dGhpcyBpcyBhIHJlZnJlc2ggdG9rZW4...</string>
+</map>
+```
+
+Plaintext. Ai có quyền đọc file này — root user, forensic tool, hay bất kỳ ai extract được backup — đều lấy được token ngay lập tức.
+
+---
+
+**Bước 2 — Kịch bản tấn công thực tế:**
+
+```
+Attacker lấy được điện thoại user (hoặc có quyền root)
+    │
+    ├── SharedPreferences:
+    │   adb pull /data/data/.../shared_prefs/FlutterSharedPreferences.xml
+    │   → Mở file, đọc access_token và refresh_token ngay lập tức  ❌
+    │
+    └── flutter_secure_storage (Keychain/Keystore):
+        Lấy được file encrypted → không decrypt được
+        vì key mã hóa nằm trong hardware chip của thiết bị đó,
+        không thể copy ra ngoài                                     ✅
+```
+
+---
+
+**Bước 3 — Cơ chế bảo vệ của Keychain/Keystore:**
+
+`flutter_secure_storage` không chỉ encrypt data — điểm mấu chốt là **key mã hóa được giữ bên trong hardware chip**:
+
+- **iOS Keychain (Secure Enclave):** Key AES-256 sinh ra trong chip Apple T2/M1/A-series, được bảo vệ bởi `kSecAttrAccessibleWhenUnlocked`. Key không bao giờ rời khỏi chip đó. Dù sao chép toàn bộ bộ nhớ flash ra ngoài, không có máy nào khác decrypt được — vì key chỉ tồn tại trong đúng con chip đó.
+
+- **Android Keystore (TEE — Trusted Execution Environment):** Private key sinh ra và lưu trong TEE — một vùng xử lý cô lập với Android OS. Ngay cả khi OS bị root, code chạy trong Android vẫn không thể export key ra ngoài TEE. Mọi thao tác mã hóa/giải mã đều xảy ra bên trong TEE.
+
+**Kết quả:** Ngay cả khi file storage bị sao chép ra ngoài, attacker không thể decrypt được token vì key chỉ tồn tại trong hardware của thiết bị cụ thể đó — đúng con chip đó, đúng thiết bị đó.
 
 ---
 
@@ -1384,12 +1810,61 @@ saveTokens(accessToken, refreshToken)
 
 ### F1. Tại sao Sealed Class?
 
-Trước khi có sealed class, error handling thường dùng `String` hay `dynamic`:
+**Bước 1 — Vấn đề khi dùng String hay generic Exception:**
 
-- **Vấn đề với String:** UI phải parse string `"Email hoặc mật khẩu không đúng"` để biết loại lỗi. Fragile, locale-breaking, không refactor-safe.
-- **Vấn đề với generic Exception:** `catch (e)` bắt mọi thứ, không biết đây là 401, 403, hay network error.
+Trước khi có sealed class, cách phổ biến nhất là throw `Exception` với message String, rồi parse string ở UI:
 
-**Sealed class giải quyết:** Compiler bắt buộc `switch` phải xử lý mọi subclass. Nếu thêm `OutOfStockException` vào sealed class mà quên thêm case trong UI, compiler báo lỗi — không cần chờ runtime.
+```
+// Cách cũ — dùng Exception với String message
+try {
+  await login(email, password);
+} catch (e) {
+  // Phải parse string để biết loại lỗi
+  if (e.toString().contains('không đúng')) {
+    showRedText('Sai thông tin đăng nhập');
+  } else if (e.toString().contains('bị khóa')) {
+    showDialog('Tài khoản bị khóa');
+  }
+  // Backend đổi message từ 'không đúng' → 'không chính xác'
+  // → App hỏng im lặng, không có compile error  ❌
+}
+```
+
+Vấn đề cốt lõi: UI phụ thuộc vào nội dung của một cái **String** — thứ mà compiler không kiểm tra được. Backend đổi wording, app hỏng mà không có warning nào.
+
+---
+
+**Bước 2 — Sealed class giải quyết:**
+
+```
+// Sealed class — compiler kiểm tra exhaustive
+switch (exception) {
+  case InvalidCredentialsException():
+    showRedText('Sai thông tin đăng nhập');
+  case AccountSuspendedException():
+    showDialog('Tài khoản bị khóa');
+  case NetworkException():
+    showSnackBar('Lỗi kết nối mạng');
+  // Thêm SessionExpiredException mà quên thêm case →
+  // compiler báo lỗi ngay khi build  ✅
+}
+```
+
+UI không còn parse string. UI xử lý **type** — thứ mà compiler hiểu. Thêm subclass mới mà quên xử lý ở UI, build fail ngay — không chờ đến lúc user gặp bug.
+
+---
+
+**Bước 3 — Tại sao cần từ khóa "sealed"?**
+
+Keyword `sealed` có một ý nghĩa duy nhất: "class này chỉ có thể có subclass **trong cùng file**".
+
+Tại sao điều đó quan trọng?
+
+- Compiler biết chính xác có bao nhiêu subclass tồn tại (vì không ai ngoài file đó có thể thêm)
+- Biết chính xác → kiểm tra được `switch` có xử lý hết mọi case không (exhaustive check)
+- Nếu không có `sealed`, ai cũng có thể tạo subclass ở file khác → compiler không biết hết → không thể đảm bảo switch đầy đủ → mất toàn bộ lợi ích
+
+**Sealed class giải quyết:** Compiler bắt buộc `switch` phải xử lý mọi subclass. Nếu thêm `SessionExpiredException` vào sealed class mà quên thêm case trong UI, compiler báo lỗi ngay khi build — không cần chờ runtime.
 
 ---
 
@@ -1619,6 +2094,62 @@ Bất kỳ màn hình nào cần hiển thị data async đều có cùng 3 case
 
 ### H1. Tại sao GoRouter?
 
+**Bước 1 — Ba kịch bản mà Navigator 1.0 không xử lý được:**
+
+*Kịch bản 1 — Bottom tab navigation:*
+
+```
+App có 2 tab: Home và Settings
+User ở Home → vào Detail → chuyển sang Settings → bấm Back
+
+Navigator 1.0: back button về đâu?
+    Stack toàn cục: [Home, Detail, Settings]
+    Bấm Back → về Detail (màn hình của tab khác!)  ← không đúng  ❌
+
+GoRouter StatefulShellRoute: mỗi tab có stack riêng
+    Tab Home stack:     [Home, Detail]
+    Tab Settings stack: [Settings]
+    Bấm Back ở Settings → không có gì để back (đúng hành vi)     ✅
+```
+
+*Kịch bản 2 — Auth guard:*
+
+```
+User chưa đăng nhập, navigate đến '/home'
+
+Navigator 1.0: phải tự thêm check vào từng screen
+    class HomeScreen extends StatefulWidget {
+      void initState() {
+        if (!isLoggedIn) Navigator.pushReplacement(context, '/login');
+      }
+      // Phải làm thủ công cho MỖI screen cần bảo vệ  ❌
+    }
+
+GoRouter redirect: 1 chỗ duy nhất kiểm tra tất cả
+    redirect: (context, state) {
+      if (!isLoggedIn && state.uri.path != '/login') return '/login';
+      return null;  // cho phép navigate bình thường
+    }  ✅
+```
+
+*Kịch bản 3 — Deep link từ push notification:*
+
+```
+User nhận notification: "Bạn có tin nhắn mới"
+App bị đóng → user tap notification → app mở ra
+
+Navigator 1.0: phải tự parse URL trong main() và navigate thủ công
+    → Phải biết app đang ở state nào, phải build đúng stack  ❌
+
+GoRouter: tự động route đến đúng screen từ URL
+    sleepbuddy://messages/123 → GoRouter tự điều hướng đến
+    MessageDetailScreen(id: '123') mà không cần code thêm    ✅
+```
+
+---
+
+**Bước 2 — So sánh các lựa chọn:**
+
 | Aspect                         | Navigator 1.0 (`Navigator.push`) | Navigator 2.0 (Router API) | GoRouter                      |
 | ------------------------------ | -------------------------------- | -------------------------- | ----------------------------- |
 | Deep linking                   | Phức tạp, manual                 | Có, nhưng boilerplate cao  | Built-in, URL-based           |
@@ -1627,7 +2158,11 @@ Bất kỳ màn hình nào cần hiển thị data async đều có cùng 3 case
 | Back button (Web/Android)      | Không kiểm soát tốt              | Manual                     | Tự động                       |
 | Boilerplate                    | Ít                               | Rất nhiều                  | Ít                            |
 
-**Lý do chọn GoRouter:** Cần bottom navigation với nested stacks (Home → Detail, Settings → SettingDetail), cần auth guard (`redirect`), cần deep link support. GoRouter giải quyết cả ba với code tối thiểu.
+---
+
+**Bước 3 — Lý do chọn GoRouter:**
+
+Dự án có đúng 3 nhu cầu: (1) bottom navigation với nested stacks riêng biệt cho mỗi tab, (2) auth guard chặn user chưa đăng nhập truy cập màn hình protected, (3) deep link từ push notification mở thẳng vào đúng màn hình. Navigator 1.0 không xử lý được nhu cầu 1 mà không tự quản lý stack phức tạp. Navigator 2.0 (Router API thô) xử lý được cả ba nhưng boilerplate cực kỳ nhiều. GoRouter là wrapper trên Navigator 2.0 — giải quyết cả ba nhu cầu với `StatefulShellRoute` (tab stack), `redirect` callback (auth guard), và URL-based routing (deep link) — với code tối thiểu.
 
 ---
 
@@ -2108,34 +2643,44 @@ state = AsyncData(null)  ← manual set, không cần async
 
 ### J1. Tại sao Cần Code Generation?
 
-Có 3 vấn đề mà viết tay gây ra:
+> Xem **C2.1** để hiểu chi tiết ba vấn đề boilerplate, hậu quả khi viết tay, và so sánh trước/sau code gen.
 
-1. **Immutability boilerplate:** Dart không có immutable data class built-in. Để có `copyWith`, `==`, `hashCode`, `toString` đúng, phải viết hàng chục dòng cho mỗi class. `freezed` tạo tự động.
+**Quick reference — 3 tool và vấn đề chúng giải quyết:**
 
-2. **JSON parsing:** `fromJson` / `toJson` phải đồng bộ với field names. Thêm một field là phải thêm ở nhiều chỗ — dễ quên, dễ sai. `json_serializable` tạo tự động, đồng bộ với annotation.
-
-3. **Provider registration:** Riverpod cần provider name (`fooProvider`), ref type, return type — tất cả phải khớp. `riverpod_generator` tạo tự động, đảm bảo type-safe.
+| Tool | Vấn đề khi viết tay | Output |
+| ---- | ------------------- | ------ |
+| `freezed` | `copyWith`, `==`, `hashCode` phải viết tay, dễ quên khi thêm field | `.freezed.dart` |
+| `json_serializable` | `fromJson`/`toJson` dễ quên field hoặc sai kiểu | `.g.dart` |
+| `riverpod_generator` | Provider type, generic, `autoDispose` dễ khai báo sai | `.g.dart` |
 
 ---
 
 ### J2. freezed: Immutable Data Classes
 
-Annotate class với `@freezed` → `build_runner` tạo ra `.freezed.dart` chứa:
+> Xem **C2.5** để hiểu chi tiết freezed, vấn đề `==` so sánh địa chỉ RAM, `copyWith`, `const factory`, và private class `_User`.
 
-- `copyWith()` — tạo bản copy với một số field thay đổi
-- `==` và `hashCode` — so sánh theo value (không phải reference)
-- `toString()` — readable debug output
-- Pattern cho **sealed class** (ví dụ: `AppException` — không dùng freezed vì là sealed với behavior, nhưng Entity dùng freezed cho immutability)
+**Quick reference:**
+- Annotation: `@freezed` trên class
+- Output file: `.freezed.dart`
+- Sinh ra: `==`, `hashCode`, `toString()`, `copyWith()`, mixin `_$ClassName`, private class `_ClassName`
+- Chạy sau khi thêm/sửa: `dart run build_runner build`
 
-`const factory User(...)` → tất cả constructor calls đều là const khi data là const — tốt cho performance.
+**Lưu ý quan trọng — freezed vs sealed:**
+- Entity dùng `@freezed` cho immutability (User, TokenEntity...)
+- `AppException` dùng Dart `sealed class` — **không dùng freezed** vì sealed class cần behavior (method) riêng từng subclass, không phải data immutability
 
 ---
 
 ### J3. json_serializable: JSON Mapping
 
-Annotate class với `@freezed` (kết hợp với `json_serializable`) và `part 'xxx.g.dart'` → tạo `fromJson` / `toJson`.
+> Xem **C2.4** để hiểu chi tiết hai hàm được sinh ra (`_$UserModelFromJson`, `_$UserModelToJson`) và tại sao thiếu `@JsonKey` gây field null lúc runtime.
 
-`@JsonKey(name: 'access_token')` giải quyết mismatch giữa API snake_case và Dart camelCase:
+**Quick reference:**
+- Annotation: `@freezed` kết hợp với `json_serializable` + `part 'xxx.g.dart'`
+- Output file: `.g.dart`
+- Sinh ra: `_$XxxFromJson(Map<String, dynamic>)` và `_$XxxToJson(_Xxx instance)`
+
+**@JsonKey quick lookup — mismatch API snake_case vs Dart camelCase:**
 
 | API JSON              | Dart field            | Annotation                        |
 | --------------------- | --------------------- | --------------------------------- |
@@ -2147,11 +2692,13 @@ Annotate class với `@freezed` (kết hợp với `json_serializable`) và `par
 
 ### J4. riverpod_generator: Provider Registration
 
-`@riverpod` annotation trên function `foo(Ref ref)` → tạo `fooProvider`.
-`@Riverpod(keepAlive: true)` → tạo provider với `keepAlive: true`.
-Class `Foo extends _$Foo` với `@riverpod` → tạo `fooProvider` và abstract `_$Foo` để extend.
+> Xem **C2.3** để hiểu chi tiết 3 thứ được sinh ra (Provider class, const instance, hash string) và trường hợp đặc biệt của AsyncNotifier (`_$LoginController`).
 
-Tất cả được define trong `.g.dart` tương ứng.
+**Quick reference:**
+- `@riverpod` trên function `foo(Ref ref)` → sinh `fooProvider` (auto-dispose)
+- `@Riverpod(keepAlive: true)` trên function → sinh `fooProvider` (persistent)
+- `@riverpod` trên class `Foo extends _$Foo` → sinh `fooProvider` và abstract class `_$Foo`
+- Output file: `.g.dart`
 
 ---
 
